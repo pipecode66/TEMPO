@@ -93,7 +93,7 @@ Archivos clave del frontend:
 
 Archivos clave del backend:
 
-- [backend/api/index.py](/C:/Users/juanitou/Documents/TRABAJO/TEMPO/backend/api/index.py)
+- [backend/index.py](/C:/Users/juanitou/Documents/TRABAJO/TEMPO/backend/index.py)
 - [backend/vercel.json](/C:/Users/juanitou/Documents/TRABAJO/TEMPO/backend/vercel.json)
 - [backend/requirements.txt](/C:/Users/juanitou/Documents/TRABAJO/TEMPO/backend/requirements.txt)
 
