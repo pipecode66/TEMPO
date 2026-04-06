@@ -1,0 +1,8 @@
+[project]
+name = "tempo-backend"
+version = "0.1.0"
+description = "Tempo FastAPI backend for Colombia overtime management."
+requires-python = ">=3.12"
+
+[project.scripts]
+app = "index:app"
