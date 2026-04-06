@@ -1,78 +1,107 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Button } from "@/components/ui/button";
-import { 
-  Clock, 
-  Users, 
-  Calendar, 
-  BarChart3, 
-  Settings, 
-  LogOut, 
-  Bell, 
-  Search,
-  ChevronDown,
-  Building2,
-  FileText,
-  TrendingUp,
-  AlertTriangle,
-  CheckCircle2,
-  Timer,
-  Moon,
-  Sun
-} from "lucide-react";
 import Link from "next/link";
+import {
+  AlertTriangle,
+  BarChart3,
+  Bell,
+  Building2,
+  Calendar,
+  CheckCircle2,
+  ChevronDown,
+  Clock,
+  FileText,
+  LogOut,
+  Moon,
+  Search,
+  Settings,
+  Sun,
+  Timer,
+  TrendingUp,
+  Users,
+} from "lucide-react";
 
-// Datos de demostración
-const statsData = [
-  { 
-    label: "Empleados Activos", 
-    value: "247", 
-    change: "+12", 
-    changeType: "positive" as const,
-    icon: Users 
+import { Button } from "@/components/ui/button";
+
+type StatTone = "neutral" | "positive";
+
+type DashboardStat = {
+  label: string;
+  value: string;
+  helper: string;
+  tone: StatTone;
+  icon: typeof Users;
+};
+
+type ActivityItem = {
+  name: string;
+  action: string;
+  time: string;
+  department: string;
+  status: "on-time" | "late" | "overtime" | "pending" | "approved";
+};
+
+type AlertItem = {
+  type: "warning" | "info" | "success";
+  message: string;
+};
+
+const statsData: DashboardStat[] = [
+  {
+    label: "Empleados activos",
+    value: "0",
+    helper: "Sin datos",
+    tone: "neutral",
+    icon: Users,
   },
-  { 
-    label: "Horas Registradas Hoy", 
-    value: "1,892", 
-    change: "+156", 
-    changeType: "positive" as const,
-    icon: Clock 
+  {
+    label: "Horas registradas hoy",
+    value: "0",
+    helper: "Sin registros",
+    tone: "neutral",
+    icon: Clock,
   },
-  { 
-    label: "Horas Extras (Semana)", 
-    value: "324", 
-    change: "-8%", 
-    changeType: "negative" as const,
-    icon: TrendingUp 
+  {
+    label: "Horas extras en la semana",
+    value: "0",
+    helper: "Sin novedades",
+    tone: "neutral",
+    icon: TrendingUp,
   },
-  { 
-    label: "Alertas Activas", 
-    value: "3", 
-    change: "Revisar", 
-    changeType: "warning" as const,
-    icon: AlertTriangle 
+  {
+    label: "Alertas activas",
+    value: "0",
+    helper: "Todo al dia",
+    tone: "positive",
+    icon: AlertTriangle,
   },
 ];
 
-const recentActivity = [
-  { name: "María García", action: "Entrada registrada", time: "08:02", department: "Contabilidad", status: "on-time" },
-  { name: "Carlos Rodríguez", action: "Salida registrada", time: "18:15", department: "IT", status: "overtime" },
-  { name: "Ana Martínez", action: "Solicitud de permiso", time: "09:30", department: "RRHH", status: "pending" },
-  { name: "Juan Pérez", action: "Entrada registrada", time: "08:45", department: "Ventas", status: "late" },
-  { name: "Laura Sánchez", action: "Horas extras aprobadas", time: "17:00", department: "Producción", status: "approved" },
-];
+const recentActivity: ActivityItem[] = [];
+const quickAlerts: AlertItem[] = [];
 
-const quickAlerts = [
-  { type: "warning", message: "3 empleados excedieron el límite de horas extras semanales" },
-  { type: "info", message: "Próximo festivo: 20 de julio - Día de la Independencia" },
-  { type: "success", message: "Nómina de junio cerrada correctamente" },
+const setupSteps = [
+  {
+    icon: Users,
+    title: "Registra tus empleados",
+    description: "Crea la base de personal para empezar a controlar jornadas reales.",
+  },
+  {
+    icon: Calendar,
+    title: "Configura la jornada",
+    description: "Define horarios, distribucion semanal y reglas internas de operacion.",
+  },
+  {
+    icon: FileText,
+    title: "Carga los primeros turnos",
+    description: "Cuando existan registros, Tempo calculara horas y alertas automaticamente.",
+  },
 ];
 
 export default function DashboardPage() {
   const [currentTime, setCurrentTime] = useState(new Date());
 
-  // Actualizar reloj
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => clearInterval(timer);
@@ -80,281 +109,351 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Sidebar */}
-      <aside className="fixed left-0 top-0 h-full w-64 bg-card border-r border-border hidden lg:flex flex-col">
-        {/* Logo */}
-        <div className="p-6 border-b border-border">
+      <aside className="fixed left-0 top-0 hidden h-full w-64 flex-col border-r border-border bg-card lg:flex">
+        <div className="border-b border-border p-6">
           <div className="flex items-center gap-2">
-            <Clock className="w-7 h-7 text-foreground" />
+            <Clock className="h-7 w-7 text-foreground" />
             <span className="font-display text-xl tracking-tight text-foreground">Tempo</span>
           </div>
         </div>
 
-        {/* Navigation */}
         <nav className="flex-1 p-4">
           <ul className="space-y-1">
             <li>
-              <a href="#" className="flex items-center gap-3 px-4 py-3 rounded-lg bg-secondary text-foreground">
-                <BarChart3 className="w-5 h-5" />
+              <a
+                href="#"
+                className="flex items-center gap-3 rounded-lg bg-secondary px-4 py-3 text-foreground"
+              >
+                <BarChart3 className="h-5 w-5" />
                 <span className="text-sm font-medium">Dashboard</span>
               </a>
             </li>
             <li>
-              <a href="#" className="flex items-center gap-3 px-4 py-3 rounded-lg text-muted-foreground hover:bg-secondary/50 hover:text-foreground transition-colors">
-                <Users className="w-5 h-5" />
+              <a
+                href="#"
+                className="flex items-center gap-3 rounded-lg px-4 py-3 text-muted-foreground transition-colors hover:bg-secondary/50 hover:text-foreground"
+              >
+                <Users className="h-5 w-5" />
                 <span className="text-sm">Empleados</span>
               </a>
             </li>
             <li>
-              <a href="#" className="flex items-center gap-3 px-4 py-3 rounded-lg text-muted-foreground hover:bg-secondary/50 hover:text-foreground transition-colors">
-                <Clock className="w-5 h-5" />
+              <a
+                href="#"
+                className="flex items-center gap-3 rounded-lg px-4 py-3 text-muted-foreground transition-colors hover:bg-secondary/50 hover:text-foreground"
+              >
+                <Clock className="h-5 w-5" />
                 <span className="text-sm">Control de tiempos</span>
               </a>
             </li>
             <li>
-              <a href="#" className="flex items-center gap-3 px-4 py-3 rounded-lg text-muted-foreground hover:bg-secondary/50 hover:text-foreground transition-colors">
-                <Calendar className="w-5 h-5" />
+              <a
+                href="#"
+                className="flex items-center gap-3 rounded-lg px-4 py-3 text-muted-foreground transition-colors hover:bg-secondary/50 hover:text-foreground"
+              >
+                <Calendar className="h-5 w-5" />
                 <span className="text-sm">Calendario</span>
               </a>
             </li>
             <li>
-              <a href="#" className="flex items-center gap-3 px-4 py-3 rounded-lg text-muted-foreground hover:bg-secondary/50 hover:text-foreground transition-colors">
-                <FileText className="w-5 h-5" />
+              <a
+                href="#"
+                className="flex items-center gap-3 rounded-lg px-4 py-3 text-muted-foreground transition-colors hover:bg-secondary/50 hover:text-foreground"
+              >
+                <FileText className="h-5 w-5" />
                 <span className="text-sm">Reportes</span>
               </a>
             </li>
             <li>
-              <a href="#" className="flex items-center gap-3 px-4 py-3 rounded-lg text-muted-foreground hover:bg-secondary/50 hover:text-foreground transition-colors">
-                <Building2 className="w-5 h-5" />
+              <a
+                href="#"
+                className="flex items-center gap-3 rounded-lg px-4 py-3 text-muted-foreground transition-colors hover:bg-secondary/50 hover:text-foreground"
+              >
+                <Building2 className="h-5 w-5" />
                 <span className="text-sm">Empresa</span>
               </a>
             </li>
             <li>
-              <a href="#" className="flex items-center gap-3 px-4 py-3 rounded-lg text-muted-foreground hover:bg-secondary/50 hover:text-foreground transition-colors">
-                <Settings className="w-5 h-5" />
-                <span className="text-sm">Configuración</span>
+              <a
+                href="#"
+                className="flex items-center gap-3 rounded-lg px-4 py-3 text-muted-foreground transition-colors hover:bg-secondary/50 hover:text-foreground"
+              >
+                <Settings className="h-5 w-5" />
+                <span className="text-sm">Configuracion</span>
               </a>
             </li>
           </ul>
         </nav>
 
-        {/* User section */}
-        <div className="p-4 border-t border-border">
+        <div className="border-t border-border p-4">
           <div className="flex items-center gap-3 px-2">
-            <div className="w-10 h-10 rounded-full bg-secondary flex items-center justify-center">
-              <span className="text-sm font-medium text-foreground">CR</span>
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-secondary">
+              <span className="text-sm font-medium text-foreground">AD</span>
             </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-foreground truncate">Carlos Rodríguez</p>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-medium text-foreground">admin@empresa.com</p>
               <p className="text-xs text-muted-foreground">Administrador</p>
             </div>
-            <Link href="/login">
-              <Button variant="ghost" size="icon-sm" className="text-muted-foreground hover:text-foreground">
-                <LogOut className="w-4 h-4" />
+            <Link href="/">
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                className="text-muted-foreground hover:text-foreground"
+              >
+                <LogOut className="h-4 w-4" />
               </Button>
             </Link>
           </div>
         </div>
       </aside>
 
-      {/* Main Content */}
       <main className="lg:ml-64">
-        {/* Top Header */}
-        <header className="sticky top-0 z-40 bg-background/80 backdrop-blur-xl border-b border-border">
-          <div className="flex items-center justify-between px-6 lg:px-8 h-16">
-            {/* Mobile menu & Search */}
+        <header className="sticky top-0 z-40 border-b border-border bg-background/80 backdrop-blur-xl">
+          <div className="flex h-16 items-center justify-between px-6 lg:px-8">
             <div className="flex items-center gap-4">
-              <div className="lg:hidden flex items-center gap-2">
-                <Clock className="w-6 h-6 text-foreground" />
+              <div className="flex items-center gap-2 lg:hidden">
+                <Clock className="h-6 w-6 text-foreground" />
                 <span className="font-display text-lg text-foreground">Tempo</span>
               </div>
-              <div className="hidden sm:flex items-center gap-2 px-4 py-2 rounded-lg bg-card border border-border">
-                <Search className="w-4 h-4 text-muted-foreground" />
+              <div className="hidden items-center gap-2 rounded-lg border border-border bg-card px-4 py-2 sm:flex">
+                <Search className="h-4 w-4 text-muted-foreground" />
                 <input
                   type="text"
-                  placeholder="Buscar empleados, reportes..."
-                  className="bg-transparent border-none outline-none text-sm text-foreground placeholder:text-muted-foreground w-64"
+                  placeholder="Buscar modulos y reportes..."
+                  className="w-64 border-none bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
                 />
               </div>
             </div>
 
-            {/* Right side */}
             <div className="flex items-center gap-4">
-              {/* Current time */}
-              <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-card border border-border">
-                <Timer className="w-4 h-4 text-muted-foreground" />
-                <span className="text-sm font-mono text-foreground">
-                  {currentTime.toLocaleTimeString("es-CO", { hour: "2-digit", minute: "2-digit" })}
+              <div className="hidden items-center gap-2 rounded-lg border border-border bg-card px-3 py-1.5 md:flex">
+                <Timer className="h-4 w-4 text-muted-foreground" />
+                <span className="font-mono text-sm text-foreground">
+                  {currentTime.toLocaleTimeString("es-CO", {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}
                 </span>
-                {currentTime.getHours() >= 21 || currentTime.getHours() < 6 ? (
-                  <Moon className="w-3 h-3 text-muted-foreground" />
+                {currentTime.getHours() >= 19 || currentTime.getHours() < 6 ? (
+                  <Moon className="h-3 w-3 text-muted-foreground" />
                 ) : (
-                  <Sun className="w-3 h-3 text-muted-foreground" />
+                  <Sun className="h-3 w-3 text-muted-foreground" />
                 )}
               </div>
 
-              {/* Notifications */}
               <Button variant="ghost" size="icon" className="relative">
-                <Bell className="w-5 h-5" />
-                <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-destructive text-destructive-foreground text-[10px] flex items-center justify-center">
-                  3
+                <Bell className="h-5 w-5" />
+                <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-secondary text-[10px] text-foreground">
+                  0
                 </span>
               </Button>
 
-              {/* Profile dropdown */}
-              <button className="hidden lg:flex items-center gap-2 px-3 py-1.5 rounded-lg hover:bg-card transition-colors">
-                <div className="w-8 h-8 rounded-full bg-secondary flex items-center justify-center">
-                  <span className="text-xs font-medium text-foreground">CR</span>
+              <button className="hidden items-center gap-2 rounded-lg px-3 py-1.5 transition-colors hover:bg-card lg:flex">
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-secondary">
+                  <span className="text-xs font-medium text-foreground">AD</span>
                 </div>
-                <ChevronDown className="w-4 h-4 text-muted-foreground" />
+                <ChevronDown className="h-4 w-4 text-muted-foreground" />
               </button>
             </div>
           </div>
         </header>
 
-        {/* Dashboard Content */}
         <div className="p-6 lg:p-8">
-          {/* Welcome section */}
           <div className="mb-8">
-            <h1 className="text-2xl lg:text-3xl font-display text-foreground">
-              Buenos días, Carlos
+            <h1 className="text-2xl font-display text-foreground lg:text-3xl">
+              Bienvenido al panel de control
             </h1>
             <p className="mt-1 text-muted-foreground">
-              Aquí está el resumen de hoy, {currentTime.toLocaleDateString("es-CO", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
+              Hoy es{" "}
+              {currentTime.toLocaleDateString("es-CO", {
+                weekday: "long",
+                day: "numeric",
+                month: "long",
+                year: "numeric",
+              })}
+              . Empieza a registrar tu informacion real desde este panel.
             </p>
           </div>
 
-          {/* Stats Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+          <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {statsData.map((stat) => (
               <div
                 key={stat.label}
-                className="p-6 rounded-xl bg-card border border-border hover:border-foreground/20 transition-colors"
+                className="rounded-xl border border-border bg-card p-6 transition-colors hover:border-foreground/20"
               >
                 <div className="flex items-start justify-between">
-                  <div className="p-2 rounded-lg bg-secondary">
-                    <stat.icon className="w-5 h-5 text-foreground" />
+                  <div className="rounded-lg bg-secondary p-2">
+                    <stat.icon className="h-5 w-5 text-foreground" />
                   </div>
                   <span
-                    className={`text-xs font-medium px-2 py-1 rounded-full ${
-                      stat.changeType === "positive"
+                    className={`rounded-full px-2 py-1 text-xs font-medium ${
+                      stat.tone === "positive"
                         ? "bg-green-500/10 text-green-500"
-                        : stat.changeType === "negative"
-                        ? "bg-red-500/10 text-red-500"
-                        : "bg-yellow-500/10 text-yellow-500"
+                        : "bg-secondary text-muted-foreground"
                     }`}
                   >
-                    {stat.change}
+                    {stat.helper}
                   </span>
                 </div>
-                <p className="mt-4 text-3xl font-display text-foreground">{stat.value}</p>
+                <p className="mt-4 font-display text-3xl text-foreground">{stat.value}</p>
                 <p className="mt-1 text-sm text-muted-foreground">{stat.label}</p>
               </div>
             ))}
           </div>
 
-          {/* Main Grid */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Recent Activity */}
-            <div className="lg:col-span-2 rounded-xl bg-card border border-border">
-              <div className="p-6 border-b border-border">
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+            <div className="rounded-xl border border-border bg-card lg:col-span-2">
+              <div className="border-b border-border p-6">
                 <div className="flex items-center justify-between">
-                  <h2 className="text-lg font-medium text-foreground">Actividad Reciente</h2>
+                  <h2 className="text-lg font-medium text-foreground">Actividad reciente</h2>
                   <Button variant="ghost" size="sm" className="text-muted-foreground">
                     Ver todo
                   </Button>
                 </div>
               </div>
-              <div className="divide-y divide-border">
-                {recentActivity.map((activity, i) => (
-                  <div key={i} className="flex items-center justify-between p-4 hover:bg-secondary/30 transition-colors">
-                    <div className="flex items-center gap-4">
-                      <div className="w-10 h-10 rounded-full bg-secondary flex items-center justify-center">
-                        <span className="text-xs font-medium text-foreground">
-                          {activity.name.split(" ").map((n) => n[0]).join("")}
+
+              {recentActivity.length === 0 ? (
+                <div className="flex flex-col items-center justify-center gap-3 px-6 py-14 text-center">
+                  <Clock className="h-10 w-10 text-muted-foreground" />
+                  <h3 className="text-base font-medium text-foreground">
+                    No hay actividad registrada
+                  </h3>
+                  <p className="max-w-md text-sm text-muted-foreground">
+                    Cuando empieces a cargar empleados, jornadas o novedades, aqui
+                    aparecera el historial reciente del sistema.
+                  </p>
+                </div>
+              ) : (
+                <div className="divide-y divide-border">
+                  {recentActivity.map((activity, index) => (
+                    <div
+                      key={`${activity.name}-${activity.time}-${index}`}
+                      className="flex items-center justify-between p-4 transition-colors hover:bg-secondary/30"
+                    >
+                      <div className="flex items-center gap-4">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-secondary">
+                          <span className="text-xs font-medium text-foreground">
+                            {activity.name
+                              .split(" ")
+                              .map((namePart) => namePart[0])
+                              .join("")}
+                          </span>
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-foreground">{activity.name}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {activity.action} - {activity.department}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span
+                          className={`h-2 w-2 rounded-full ${
+                            activity.status === "on-time"
+                              ? "bg-green-500"
+                              : activity.status === "late"
+                                ? "bg-red-500"
+                                : activity.status === "overtime"
+                                  ? "bg-yellow-500"
+                                  : activity.status === "approved"
+                                    ? "bg-green-500"
+                                    : "bg-muted-foreground"
+                          }`}
+                        />
+                        <span className="font-mono text-sm text-muted-foreground">
+                          {activity.time}
                         </span>
                       </div>
-                      <div>
-                        <p className="text-sm font-medium text-foreground">{activity.name}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {activity.action} • {activity.department}
-                        </p>
-                      </div>
                     </div>
-                    <div className="flex items-center gap-3">
-                      <span
-                        className={`w-2 h-2 rounded-full ${
-                          activity.status === "on-time"
-                            ? "bg-green-500"
-                            : activity.status === "late"
-                            ? "bg-red-500"
-                            : activity.status === "overtime"
-                            ? "bg-yellow-500"
-                            : activity.status === "approved"
-                            ? "bg-green-500"
-                            : "bg-muted-foreground"
-                        }`}
-                      />
-                      <span className="text-sm text-muted-foreground font-mono">{activity.time}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
             </div>
 
-            {/* Alerts & Quick Info */}
             <div className="space-y-6">
-              {/* Alerts */}
-              <div className="rounded-xl bg-card border border-border">
-                <div className="p-6 border-b border-border">
-                  <h2 className="text-lg font-medium text-foreground">Alertas del Sistema</h2>
+              <div className="rounded-xl border border-border bg-card">
+                <div className="border-b border-border p-6">
+                  <h2 className="text-lg font-medium text-foreground">Alertas del sistema</h2>
                 </div>
-                <div className="p-4 space-y-3">
-                  {quickAlerts.map((alert, i) => (
-                    <div
-                      key={i}
-                      className={`flex items-start gap-3 p-3 rounded-lg ${
-                        alert.type === "warning"
-                          ? "bg-yellow-500/10"
-                          : alert.type === "success"
-                          ? "bg-green-500/10"
-                          : "bg-secondary"
-                      }`}
-                    >
-                      {alert.type === "warning" ? (
-                        <AlertTriangle className="w-4 h-4 text-yellow-500 shrink-0 mt-0.5" />
-                      ) : alert.type === "success" ? (
-                        <CheckCircle2 className="w-4 h-4 text-green-500 shrink-0 mt-0.5" />
-                      ) : (
-                        <Bell className="w-4 h-4 text-muted-foreground shrink-0 mt-0.5" />
-                      )}
-                      <p className="text-sm text-foreground">{alert.message}</p>
+
+                {quickAlerts.length === 0 ? (
+                  <div className="p-6">
+                    <div className="rounded-lg bg-secondary p-4">
+                      <p className="text-sm font-medium text-foreground">
+                        No hay alertas activas.
+                      </p>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        Las alertas apareceran aqui cuando existan novedades legales
+                        o registros que requieran atencion.
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-3 p-4">
+                    {quickAlerts.map((alert, index) => (
+                      <div
+                        key={`${alert.type}-${index}`}
+                        className={`flex items-start gap-3 rounded-lg p-3 ${
+                          alert.type === "warning"
+                            ? "bg-yellow-500/10"
+                            : alert.type === "success"
+                              ? "bg-green-500/10"
+                              : "bg-secondary"
+                        }`}
+                      >
+                        {alert.type === "warning" ? (
+                          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-yellow-500" />
+                        ) : alert.type === "success" ? (
+                          <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-green-500" />
+                        ) : (
+                          <Bell className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+                        )}
+                        <p className="text-sm text-foreground">{alert.message}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="rounded-xl border border-border bg-card p-6">
+                <h3 className="mb-4 text-sm font-medium uppercase tracking-wider text-muted-foreground">
+                  Primeros pasos
+                </h3>
+                <div className="space-y-4">
+                  {setupSteps.map((step) => (
+                    <div key={step.title} className="flex items-start gap-3">
+                      <div className="rounded-lg bg-secondary p-2">
+                        <step.icon className="h-4 w-4 text-foreground" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-foreground">{step.title}</p>
+                        <p className="text-sm text-muted-foreground">{step.description}</p>
+                      </div>
                     </div>
                   ))}
                 </div>
               </div>
 
-              {/* Jornada Info */}
-              <div className="rounded-xl bg-card border border-border p-6">
-                <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-4">
-                  Configuración Actual
+              <div className="rounded-xl border border-border bg-card p-6">
+                <h3 className="mb-4 text-sm font-medium uppercase tracking-wider text-muted-foreground">
+                  Configuracion actual
                 </h3>
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
-                    <span className="text-sm text-muted-foreground">Jornada Máxima</span>
+                    <span className="text-sm text-muted-foreground">Jornada maxima</span>
                     <span className="text-sm font-medium text-foreground">42h/semana</span>
                   </div>
                   <div className="flex items-center justify-between">
-                    <span className="text-sm text-muted-foreground">Horario Nocturno</span>
-                    <span className="text-sm font-medium text-foreground">21:00 - 06:00</span>
+                    <span className="text-sm text-muted-foreground">Horario nocturno</span>
+                    <span className="text-sm font-medium text-foreground">19:00 - 06:00</span>
                   </div>
                   <div className="flex items-center justify-between">
-                    <span className="text-sm text-muted-foreground">Extras Máximas</span>
+                    <span className="text-sm text-muted-foreground">Extras maximas</span>
                     <span className="text-sm font-medium text-foreground">12h/semana</span>
                   </div>
                   <div className="flex items-center justify-between">
-                    <span className="text-sm text-muted-foreground">Ley Vigente</span>
-                    <span className="text-sm font-medium text-foreground">Ley 2101</span>
+                    <span className="text-sm text-muted-foreground">Ley vigente</span>
+                    <span className="text-sm font-medium text-foreground">Julio 2026</span>
                   </div>
                 </div>
               </div>
