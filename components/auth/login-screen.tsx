@@ -4,9 +4,7 @@ import { type FormEvent, useState, useEffect } from "react";
 import {
   AlertCircle,
   ArrowRight,
-  Building2,
   CheckCircle2,
-  Clock,
   Eye,
   EyeOff,
   Gauge,
@@ -31,22 +29,22 @@ const features = [
   {
     icon: Gauge,
     title: "Control preciso",
-    description: "Seguimiento de jornadas en tiempo real",
+    description: "Seguimiento de jornadas",
   },
   {
     icon: TrendingUp,
     title: "Horas extras",
-    description: "Calculo automatico de recargos",
-  },
-  {
-    icon: Shield,
-    title: "100% Legal",
-    description: "Cumplimiento CST Colombia",
+    description: "Calculo automatico",
   },
   {
     icon: Zap,
     title: "Tiempo real",
-    description: "Alertas y notificaciones instantaneas",
+    description: "Alertas instantaneas",
+  },
+  {
+    icon: Users,
+    title: "Empleados",
+    description: "Gestion centralizada",
   },
 ];
 
@@ -179,14 +177,13 @@ export function LoginScreen() {
           <div className="flex flex-col items-center justify-center flex-1 py-12">
             <AnimatedClock />
             
-            <div className="mt-12 text-center max-w-lg">
+            <div className="mt-12 text-left max-w-lg">
               <h1 className="text-4xl xl:text-5xl font-semibold text-foreground leading-tight">
                 Control de Tiempos
                 <span className="block mt-2 tempo-gradient-text">Inteligente</span>
               </h1>
               <p className="mt-6 text-lg text-muted-foreground leading-relaxed">
-                Sistema integral de gestion de nomina colombiana con calculo
-                automatico de recargos, horas extras y cumplimiento legal.
+                Software empresarial para optimizar la gestion del tiempo de tu equipo.
               </p>
             </div>
           </div>
@@ -209,11 +206,7 @@ export function LoginScreen() {
             ))}
           </div>
 
-          {/* Footer */}
-          <div className="flex items-center justify-between text-sm text-muted-foreground mt-8 pt-8 border-t border-border">
-            <p>Actualizado a julio 2026</p>
-            <p>Ley 2101 / CST Colombia</p>
-          </div>
+
         </div>
       </div>
 
