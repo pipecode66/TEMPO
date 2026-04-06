@@ -34,3 +34,4 @@ __pycache__/
 
 # local logs
 tempo-api*.log
+next-dev*.log
