@@ -49,16 +49,17 @@ const features = [
 ];
 
 function AnimatedClock() {
-  const [time, setTime] = useState(new Date());
+  const [time, setTime] = useState<Date | null>(null);
 
   useEffect(() => {
+    setTime(new Date());
     const timer = setInterval(() => setTime(new Date()), 1000);
     return () => clearInterval(timer);
   }, []);
 
-  const seconds = time.getSeconds();
-  const minutes = time.getMinutes();
-  const hours = time.getHours() % 12;
+  const seconds = time?.getSeconds() ?? 0;
+  const minutes = time?.getMinutes() ?? 0;
+  const hours = (time?.getHours() ?? 0) % 12;
 
   return (
     <div className="relative h-48 w-48">
