@@ -2,6 +2,7 @@
 
 import { useEffect, useState, type FormEvent } from "react";
 
+import { useAuth } from "@/components/auth/auth-provider";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -37,9 +38,11 @@ const defaultLegalSettings = {
 };
 
 export function SettingsModule() {
-  const { policySettings, savePolicySettings, resetWorkspace } = useTempoWorkspace();
+  const { policySettings, refreshWorkspace, savePolicySettings } = useTempoWorkspace();
+  const { permissions } = useAuth();
   const [formState, setFormState] = useState(policySettings);
   const [message, setMessage] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     setFormState(policySettings);
@@ -52,31 +55,38 @@ export function SettingsModule() {
     }));
   }
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    savePolicySettings({
-      ...formState,
-      jornadaSemanalMaxima: Number(formState.jornadaSemanalMaxima),
-      diasLaboralesSemana: Number(formState.diasLaboralesSemana) as 5 | 6,
-      limiteExtrasDiarias: Number(formState.limiteExtrasDiarias),
-      limiteExtrasSemanales: Number(formState.limiteExtrasSemanales),
-      recargoDescansoObligatorio: Number(formState.recargoDescansoObligatorio),
-    });
-    setMessage("Configuracion actualizada.");
+    if (!permissions.canManageSettings) {
+      setMessage("Tu rol solo puede consultar la configuracion.");
+      return;
+    }
+
+    try {
+      setIsSubmitting(true);
+      await savePolicySettings({
+        ...formState,
+        jornadaSemanalMaxima: Number(formState.jornadaSemanalMaxima),
+        diasLaboralesSemana: Number(formState.diasLaboralesSemana) as 5 | 6,
+        limiteExtrasDiarias: Number(formState.limiteExtrasDiarias),
+        limiteExtrasSemanales: Number(formState.limiteExtrasSemanales),
+        recargoDescansoObligatorio: Number(formState.recargoDescansoObligatorio),
+      });
+      setMessage("Configuracion actualizada.");
+    } catch (error) {
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : "No fue posible guardar la configuracion.",
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   function restoreDefaults() {
     setFormState(defaultLegalSettings);
     setMessage("Se cargaron los valores legales base de julio 2026.");
-  }
-
-  function handleResetWorkspace() {
-    if (!window.confirm("Esto eliminara empleados, jornadas y configuracion guardada. Continuar?")) {
-      return;
-    }
-
-    resetWorkspace();
-    setMessage("Workspace reiniciado correctamente.");
   }
 
   return (
@@ -105,10 +115,12 @@ export function SettingsModule() {
                     updateField("jornadaSemanalMaxima", event.target.value)
                   }
                   placeholder="Jornada semanal"
+                  disabled={!permissions.canManageSettings}
                 />
                 <Select
                   value={String(formState.diasLaboralesSemana)}
                   onValueChange={(value) => updateField("diasLaboralesSemana", value)}
+                  disabled={!permissions.canManageSettings}
                 >
                   <SelectTrigger>
                     <SelectValue />
@@ -125,6 +137,7 @@ export function SettingsModule() {
                     updateField("limiteExtrasDiarias", event.target.value)
                   }
                   placeholder="Extras diarias"
+                  disabled={!permissions.canManageSettings}
                 />
                 <Input
                   type="number"
@@ -133,6 +146,7 @@ export function SettingsModule() {
                     updateField("limiteExtrasSemanales", event.target.value)
                   }
                   placeholder="Extras semanales"
+                  disabled={!permissions.canManageSettings}
                 />
               </div>
 
@@ -143,6 +157,7 @@ export function SettingsModule() {
                   onChange={(event) =>
                     updateField("horarioNocturnoInicio", event.target.value)
                   }
+                  disabled={!permissions.canManageSettings}
                 />
                 <Input
                   type="time"
@@ -150,6 +165,7 @@ export function SettingsModule() {
                   onChange={(event) =>
                     updateField("horarioNocturnoFin", event.target.value)
                   }
+                  disabled={!permissions.canManageSettings}
                 />
                 <Input
                   type="number"
@@ -161,11 +177,13 @@ export function SettingsModule() {
                     updateField("recargoDescansoObligatorio", event.target.value)
                   }
                   placeholder="Recargo descanso"
+                  disabled={!permissions.canManageSettings}
                 />
                 <Input
                   type="date"
                   value={formState.fechaNormativa}
                   onChange={(event) => updateField("fechaNormativa", event.target.value)}
+                  disabled={!permissions.canManageSettings}
                 />
               </div>
 
@@ -176,8 +194,15 @@ export function SettingsModule() {
               ) : null}
 
               <div className="flex flex-col gap-3 sm:flex-row">
-                <Button type="submit">Guardar configuracion</Button>
-                <Button type="button" variant="outline" onClick={restoreDefaults}>
+                <Button type="submit" disabled={!permissions.canManageSettings || isSubmitting}>
+                  {isSubmitting ? "Guardando..." : "Guardar configuracion"}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={restoreDefaults}
+                  disabled={!permissions.canManageSettings}
+                >
                   Restaurar valores legales
                 </Button>
               </div>
@@ -205,6 +230,7 @@ export function SettingsModule() {
               <Switch
                 checked={formState.alertasAutomaticas}
                 onCheckedChange={(checked) => updateField("alertasAutomaticas", checked)}
+                disabled={!permissions.canManageSettings}
               />
             </div>
 
@@ -220,6 +246,7 @@ export function SettingsModule() {
                 onCheckedChange={(checked) =>
                   updateField("cierreSemanalAutomatico", checked)
                 }
+                disabled={!permissions.canManageSettings}
               />
             </div>
 
@@ -243,19 +270,19 @@ export function SettingsModule() {
           <CardHeader>
             <CardTitle>Mantenimiento del workspace</CardTitle>
             <CardDescription>
-              Usa estas acciones con cuidado. Los datos se guardan en el navegador actual.
+              El entorno ahora usa persistencia central y se puede resincronizar bajo demanda.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="rounded-2xl border border-border bg-background/50 px-4 py-4">
-              <p className="text-sm font-medium text-foreground">Persistencia local</p>
+              <p className="text-sm font-medium text-foreground">Persistencia central</p>
               <p className="mt-2 text-sm text-muted-foreground">
-                El estado de Tempo se conserva entre sesiones del navegador hasta que lo reinicies.
+                Los cambios de empleados, jornadas y empresa quedan en base de datos y auditados.
               </p>
             </div>
 
-            <Button type="button" variant="destructive" onClick={handleResetWorkspace}>
-              Reiniciar workspace
+            <Button type="button" variant="outline" onClick={() => void refreshWorkspace()}>
+              Resincronizar desde la API
             </Button>
           </CardContent>
         </Card>

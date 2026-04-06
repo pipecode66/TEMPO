@@ -1,12 +1,16 @@
 "use client";
 
+import { useEffect, useState, type FormEvent } from "react";
 import {
-  useEffect,
-  useState,
-  type FormEvent,
-} from "react";
-import { AlertTriangle, Calculator, Sparkles } from "lucide-react";
+  AlertTriangle,
+  Calculator,
+  FileSpreadsheet,
+  Sparkles,
+  Trash2,
+  Upload,
+} from "lucide-react";
 
+import { useAuth } from "@/components/auth/auth-provider";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -33,7 +37,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { ApiResponseError } from "@/lib/fetch-json";
+import { Textarea } from "@/components/ui/textarea";
+import { getApiErrorMessage } from "@/lib/fetch-json";
 import {
   calculateWorkday,
   type JornadaRequest,
@@ -51,33 +56,31 @@ function parseOptionalNumber(value: string): number | null {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-function resolveApiError(error: unknown): string {
-  if (error instanceof ApiResponseError) {
-    if (typeof error.payload === "string" && error.payload.length > 0) {
-      return error.payload;
-    }
+function downloadTextFile(filename: string, content: string, contentType: string) {
+  const blob = new Blob([content], { type: contentType });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
 
-    if (
-      typeof error.payload === "object" &&
-      error.payload &&
-      "detail" in error.payload &&
-      typeof error.payload.detail === "string"
-    ) {
-      return error.payload.detail;
-    }
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.click();
 
-    return error.message;
-  }
-
-  if (error instanceof Error) {
-    return error.message;
-  }
-
-  return "No fue posible calcular la jornada en este momento.";
+  URL.revokeObjectURL(url);
 }
 
 export function TimeControlModule() {
-  const { employees, policySettings, addTimeEntry, timeEntries } = useTempoWorkspace();
+  const {
+    addTimeEntry,
+    downloadImportErrorsCsv,
+    importEntries,
+    lastImportResult,
+    policySettings,
+    removeTimeEntry,
+    timeEntries,
+  } = useTempoWorkspace();
+  const { permissions } = useAuth();
+  const { employees } = useTempoWorkspace();
+
   const [formState, setFormState] = useState({
     selectedEmployeeId: "manual",
     manualName: "",
@@ -103,6 +106,14 @@ export function TimeControlModule() {
     text: string;
   } | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [mappingJson, setMappingJson] = useState("");
+  const [createMissingEmployees, setCreateMissingEmployees] = useState(true);
+  const [importMessage, setImportMessage] = useState<{
+    type: "success" | "error";
+    text: string;
+  } | null>(null);
+  const [isImporting, setIsImporting] = useState(false);
 
   const selectedEmployee = employees.find(
     (employee) => employee.id === formState.selectedEmployeeId,
@@ -124,10 +135,7 @@ export function TimeControlModule() {
     }));
   }, [selectedEmployee]);
 
-  function updateField(
-    field: keyof typeof formState,
-    value: string | boolean,
-  ) {
+  function updateField(field: keyof typeof formState, value: string | boolean) {
     setFormState((current) => ({
       ...current,
       [field]: value,
@@ -194,30 +202,98 @@ export function TimeControlModule() {
       setIsSubmitting(true);
       const response = await calculateWorkday(payload);
       setResult(response);
-      setStatusMessage({
-        type: "success",
-        text: "Jornada calculada y guardada en el historial operativo.",
-      });
 
-      addTimeEntry({
-        fecha: formState.fecha,
-        employeeId: selectedEmployee?.id,
-        employeeName: selectedEmployee?.nombre || formState.manualName.trim(),
-        area: selectedEmployee?.area || formState.manualArea.trim() || "Sin area",
-        horaEntrada: formState.horaEntrada,
-        horaSalida: formState.horaSalida,
-        esFestivo: formState.esFestivo,
-        esDominical: formState.esDominical,
-        acumuladoSemanalHoras: payload.acumulado_semanal_horas,
-        response,
-      });
+      if (selectedEmployee && permissions.canManageTimeEntries) {
+        await addTimeEntry({
+          employeeId: selectedEmployee.id,
+          fecha: formState.fecha,
+          horaEntrada: formState.horaEntrada,
+          horaSalida: formState.horaSalida,
+          esFestivo: formState.esFestivo,
+          esDominical: formState.esDominical,
+          acumuladoSemanalHoras: payload.acumulado_semanal_horas,
+          notes: "Registrado desde Tempo workspace",
+        });
+        setStatusMessage({
+          type: "success",
+          text: "Jornada calculada y registrada en la base central.",
+        });
+      } else if (selectedEmployee && !permissions.canManageTimeEntries) {
+        setStatusMessage({
+          type: "success",
+          text: "Jornada calculada. Tu rol no tiene permiso para guardarla.",
+        });
+      } else {
+        setStatusMessage({
+          type: "success",
+          text:
+            "Jornada calculada en modo manual. Para persistirla debes seleccionar un empleado existente.",
+        });
+      }
     } catch (error) {
       setStatusMessage({
         type: "error",
-        text: resolveApiError(error),
+        text: getApiErrorMessage(error),
       });
     } finally {
       setIsSubmitting(false);
+    }
+  }
+
+  async function handleImport(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!permissions.canManageTimeEntries) {
+      setImportMessage({
+        type: "error",
+        text: "Tu rol no puede cargar importaciones masivas.",
+      });
+      return;
+    }
+    if (!importFile) {
+      setImportMessage({
+        type: "error",
+        text: "Selecciona un archivo CSV o XLSX antes de importar.",
+      });
+      return;
+    }
+
+    try {
+      setIsImporting(true);
+      const mapping =
+        mappingJson.trim().length > 0
+          ? (JSON.parse(mappingJson) as Record<string, string>)
+          : undefined;
+      const result = await importEntries(importFile, {
+        createMissingEmployees,
+        mapping,
+      });
+      setImportMessage({
+        type: "success",
+        text: `Importacion completada: ${result.successful_rows} filas exitosas y ${result.rejected_rows} rechazadas.`,
+      });
+    } catch (error) {
+      setImportMessage({
+        type: "error",
+        text: getApiErrorMessage(error),
+      });
+    } finally {
+      setIsImporting(false);
+    }
+  }
+
+  async function handleDownloadImportErrors() {
+    if (!lastImportResult?.error_report_download_url) {
+      return;
+    }
+
+    try {
+      const content = await downloadImportErrorsCsv(lastImportResult.error_report_download_url);
+      downloadTextFile("tempo-import-errors.csv", content, "text/csv;charset=utf-8");
+    } catch (error) {
+      setImportMessage({
+        type: "error",
+        text: getApiErrorMessage(error),
+      });
     }
   }
 
@@ -232,7 +308,7 @@ export function TimeControlModule() {
           <CardHeader>
             <CardTitle>Liquidar jornada</CardTitle>
             <CardDescription>
-              Usa un empleado existente o trabaja en modo manual para calcular recargos y horas extra.
+              Calcula el impacto legal y, si eliges un empleado, guarda la jornada con auditoria.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -248,7 +324,7 @@ export function TimeControlModule() {
                       <SelectValue placeholder="Selecciona un empleado" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="manual">Calculo manual</SelectItem>
+                      <SelectItem value="manual">Solo calculo manual</SelectItem>
                       {employees.map((employee) => (
                         <SelectItem key={employee.id} value={employee.id}>
                           {employee.nombre}
@@ -272,11 +348,13 @@ export function TimeControlModule() {
                   value={formState.manualName}
                   onChange={(event) => updateField("manualName", event.target.value)}
                   placeholder="Nombre del empleado"
+                  disabled={Boolean(selectedEmployee)}
                 />
                 <Input
                   value={formState.manualArea}
                   onChange={(event) => updateField("manualArea", event.target.value)}
                   placeholder="Area o centro de costo"
+                  disabled={Boolean(selectedEmployee)}
                 />
               </div>
 
@@ -408,10 +486,21 @@ export function TimeControlModule() {
                 </div>
               ) : null}
 
-              <Button type="submit" className="w-full" disabled={isSubmitting}>
-                <Calculator className="h-4 w-4" />
-                {isSubmitting ? "Calculando..." : "Calcular jornada"}
-              </Button>
+              <div className="flex flex-col gap-3 sm:flex-row">
+                <Button type="submit" className="w-full" disabled={isSubmitting}>
+                  <Calculator className="h-4 w-4" />
+                  {isSubmitting
+                    ? "Procesando..."
+                    : selectedEmployee && permissions.canManageTimeEntries
+                      ? "Calcular y guardar jornada"
+                      : "Calcular jornada"}
+                </Button>
+                {!permissions.canManageTimeEntries ? (
+                  <Badge variant="outline" className="justify-center px-4">
+                    Rol en consulta
+                  </Badge>
+                ) : null}
+              </div>
             </form>
           </CardContent>
         </Card>
@@ -515,9 +604,85 @@ export function TimeControlModule() {
 
           <Card className="bg-card/80">
             <CardHeader>
+              <CardTitle>Importacion masiva</CardTitle>
+              <CardDescription>
+                Migra jornadas desde CSV o Excel con validacion por fila y reporte de errores.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={handleImport} className="space-y-4">
+                <Input
+                  type="file"
+                  accept=".csv,.xlsx,.xlsm"
+                  onChange={(event) => {
+                    setImportFile(event.target.files?.[0] ?? null);
+                  }}
+                  disabled={!permissions.canManageTimeEntries}
+                />
+                <Textarea
+                  value={mappingJson}
+                  onChange={(event) => setMappingJson(event.target.value)}
+                  placeholder='Mapeo opcional JSON, por ejemplo: {"employee_name":"Empleado","work_date":"Fecha"}'
+                  disabled={!permissions.canManageTimeEntries}
+                />
+                <label className="flex items-center gap-3 text-sm text-foreground">
+                  <Checkbox
+                    checked={createMissingEmployees}
+                    onCheckedChange={(checked) => setCreateMissingEmployees(checked === true)}
+                    disabled={!permissions.canManageTimeEntries}
+                  />
+                  Crear empleados faltantes durante la importacion
+                </label>
+
+                {importMessage ? (
+                  <div
+                    className={`rounded-2xl px-4 py-3 text-sm ${
+                      importMessage.type === "success"
+                        ? "bg-green-500/10 text-green-400"
+                        : "bg-red-500/10 text-red-400"
+                    }`}
+                  >
+                    {importMessage.text}
+                  </div>
+                ) : null}
+
+                {lastImportResult ? (
+                  <div className="rounded-2xl bg-background/60 p-4 text-sm text-muted-foreground">
+                    <p>
+                      Ultima importacion: {lastImportResult.successful_rows} exitosas y{" "}
+                      {lastImportResult.rejected_rows} rechazadas.
+                    </p>
+                    {lastImportResult.error_report_download_url ? (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="mt-3"
+                        onClick={() => void handleDownloadImportErrors()}
+                      >
+                        <FileSpreadsheet className="h-4 w-4" />
+                        Descargar errores CSV
+                      </Button>
+                    ) : null}
+                  </div>
+                ) : null}
+
+                <Button
+                  type="submit"
+                  className="w-full"
+                  disabled={!permissions.canManageTimeEntries || isImporting}
+                >
+                  <Upload className="h-4 w-4" />
+                  {isImporting ? "Importando..." : "Importar archivo"}
+                </Button>
+              </form>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-card/80">
+            <CardHeader>
               <CardTitle>Historial reciente</CardTitle>
               <CardDescription>
-                Ultimas jornadas almacenadas localmente dentro del workspace.
+                Ultimas jornadas persistidas en la base central del workspace.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
@@ -537,13 +702,25 @@ export function TimeControlModule() {
                         {entry.fecha} | {entry.horaEntrada} - {entry.horaSalida}
                       </p>
                     </div>
-                    <Badge
-                      variant={
-                        entry.response.alerta_limite_legal ? "destructive" : "secondary"
-                      }
-                    >
-                      {entry.response.alerta_limite_legal ? "Alerta" : "OK"}
-                    </Badge>
+                    <div className="flex items-center gap-2">
+                      <Badge
+                        variant={
+                          entry.response.alerta_limite_legal ? "destructive" : "secondary"
+                        }
+                      >
+                        {entry.response.alerta_limite_legal ? "Alerta" : "OK"}
+                      </Badge>
+                      {permissions.canManageTimeEntries ? (
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          onClick={() => void removeTimeEntry(entry.id)}
+                          aria-label={`Eliminar jornada de ${entry.employeeName}`}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      ) : null}
+                    </div>
                   </div>
                 ))
               )}

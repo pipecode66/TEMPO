@@ -15,7 +15,10 @@ export async function fetchJson<T>(
   input: RequestInfo | URL,
   init?: RequestInit,
 ): Promise<T> {
-  const response = await fetch(input, init);
+  const response = await fetch(input, {
+    credentials: init?.credentials ?? "include",
+    ...init,
+  });
   const rawBody = await response.text();
   const contentType = response.headers.get("content-type") ?? "";
   const looksLikeJson = contentType.includes("application/json");
@@ -58,4 +61,41 @@ export async function fetchJson<T>(
   }
 
   return parsed as T;
+}
+
+export function getApiErrorMessage(error: unknown): string {
+  if (error instanceof ApiResponseError) {
+    if (
+      typeof error.payload === "object" &&
+      error.payload &&
+      "error" in error.payload &&
+      typeof error.payload.error === "object" &&
+      error.payload.error &&
+      "message" in error.payload.error &&
+      typeof error.payload.error.message === "string"
+    ) {
+      return error.payload.error.message;
+    }
+
+    if (
+      typeof error.payload === "object" &&
+      error.payload &&
+      "detail" in error.payload &&
+      typeof error.payload.detail === "string"
+    ) {
+      return error.payload.detail;
+    }
+
+    if (typeof error.payload === "string" && error.payload.length > 0) {
+      return error.payload;
+    }
+
+    return error.message;
+  }
+
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  return "Ocurrio un error inesperado al contactar la API.";
 }

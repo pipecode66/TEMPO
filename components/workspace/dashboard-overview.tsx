@@ -158,7 +158,7 @@ export function DashboardOverview() {
           </CardHeader>
           <CardContent className="space-y-2">
             <p className="text-sm text-muted-foreground">
-              {timeEntries.length} jornadas almacenadas en el historial local.
+              {timeEntries.length} jornadas persistidas en el historial central.
             </p>
             <Badge variant="secondary">Corte: {formatLongDate(new Date())}</Badge>
           </CardContent>

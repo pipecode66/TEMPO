@@ -3,6 +3,7 @@
 import { useDeferredValue, useState, type FormEvent } from "react";
 import { Search, Trash2, UserPlus, Users } from "lucide-react";
 
+import { useAuth } from "@/components/auth/auth-provider";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -54,7 +55,9 @@ export function EmployeesModule() {
     policySettings,
     removeEmployee,
     updateEmployeeStatus,
+    isSyncing,
   } = useTempoWorkspace();
+  const { permissions } = useAuth();
   const [formState, setFormState] = useState({
     ...defaultFormState,
     jornadaSemanalHoras: String(policySettings.jornadaSemanalMaxima),
@@ -65,6 +68,7 @@ export function EmployeesModule() {
   const [feedback, setFeedback] = useState<{ type: "error" | "success"; text: string } | null>(
     null,
   );
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const deferredSearch = useDeferredValue(search);
   const normalizedSearch = deferredSearch.trim().toLowerCase();
@@ -99,8 +103,15 @@ export function EmployeesModule() {
     }));
   }
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!permissions.canManageEmployees) {
+      setFeedback({
+        type: "error",
+        text: "Tu rol solo tiene acceso de consulta sobre empleados.",
+      });
+      return;
+    }
 
     if (!formState.nombre || !formState.email || !formState.cargo || !formState.area) {
       setFeedback({
@@ -150,16 +161,26 @@ export function EmployeesModule() {
       estado: formState.estado as EmployeeStatus,
     };
 
-    addEmployee(payload);
-    setFormState({
-      ...defaultFormState,
-      jornadaSemanalHoras: String(policySettings.jornadaSemanalMaxima),
-      diasLaboralesSemana: String(policySettings.diasLaboralesSemana),
-    });
-    setFeedback({
-      type: "success",
-      text: `${payload.nombre} fue agregado al directorio operativo.`,
-    });
+    try {
+      setIsSubmitting(true);
+      await addEmployee(payload);
+      setFormState({
+        ...defaultFormState,
+        jornadaSemanalHoras: String(policySettings.jornadaSemanalMaxima),
+        diasLaboralesSemana: String(policySettings.diasLaboralesSemana),
+      });
+      setFeedback({
+        type: "success",
+        text: `${payload.nombre} fue agregado al directorio operativo.`,
+      });
+    } catch (error) {
+      setFeedback({
+        type: "error",
+        text: error instanceof Error ? error.message : "No fue posible guardar el empleado.",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   return (
@@ -202,9 +223,12 @@ export function EmployeesModule() {
               <div>
                 <CardTitle>Directorio de empleados</CardTitle>
                 <CardDescription>
-                  Busca, filtra y actualiza el estado operativo del equipo.
+                  Busca, filtra y actualiza el estado operativo del equipo centralizado.
                 </CardDescription>
               </div>
+              {!permissions.canManageEmployees ? (
+                <Badge variant="outline">Modo consulta</Badge>
+              ) : null}
               <div className="flex flex-col gap-3 sm:flex-row">
                 <div className="relative w-full sm:w-72">
                   <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -286,9 +310,21 @@ export function EmployeesModule() {
                       <TableCell>
                         <Select
                           value={employee.estado}
-                          onValueChange={(value) =>
-                            updateEmployeeStatus(employee.id, value as EmployeeStatus)
-                          }
+                          onValueChange={async (value) => {
+                            try {
+                              setFeedback(null);
+                              await updateEmployeeStatus(employee.id, value as EmployeeStatus);
+                            } catch (error) {
+                              setFeedback({
+                                type: "error",
+                                text:
+                                  error instanceof Error
+                                    ? error.message
+                                    : "No fue posible actualizar el estado.",
+                              });
+                            }
+                          }}
+                          disabled={!permissions.canManageEmployees}
                         >
                           <SelectTrigger className="w-32">
                             <SelectValue />
@@ -304,8 +340,22 @@ export function EmployeesModule() {
                         <Button
                           variant="ghost"
                           size="icon-sm"
-                          onClick={() => removeEmployee(employee.id)}
+                          onClick={async () => {
+                            try {
+                              setFeedback(null);
+                              await removeEmployee(employee.id);
+                            } catch (error) {
+                              setFeedback({
+                                type: "error",
+                                text:
+                                  error instanceof Error
+                                    ? error.message
+                                    : "No fue posible eliminar el empleado.",
+                              });
+                            }
+                          }}
                           aria-label={`Eliminar a ${employee.nombre}`}
+                          disabled={!permissions.canManageEmployees}
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>
@@ -322,7 +372,7 @@ export function EmployeesModule() {
           <CardHeader>
             <CardTitle>Nuevo empleado</CardTitle>
             <CardDescription>
-              Guarda la ficha basica del colaborador para operar dentro de Tempo.
+              Guarda la ficha basica del colaborador en la base central de Tempo.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -332,12 +382,14 @@ export function EmployeesModule() {
                   value={formState.nombre}
                   onChange={(event) => updateField("nombre", event.target.value)}
                   placeholder="Nombre completo"
+                  disabled={!permissions.canManageEmployees}
                 />
                 <Input
                   type="email"
                   value={formState.email}
                   onChange={(event) => updateField("email", event.target.value)}
                   placeholder="correo@empresa.com"
+                  disabled={!permissions.canManageEmployees}
                 />
               </div>
 
@@ -346,11 +398,13 @@ export function EmployeesModule() {
                   value={formState.cargo}
                   onChange={(event) => updateField("cargo", event.target.value)}
                   placeholder="Cargo"
+                  disabled={!permissions.canManageEmployees}
                 />
                 <Input
                   value={formState.area}
                   onChange={(event) => updateField("area", event.target.value)}
                   placeholder="Area"
+                  disabled={!permissions.canManageEmployees}
                 />
               </div>
 
@@ -361,6 +415,7 @@ export function EmployeesModule() {
                   value={formState.edad}
                   onChange={(event) => updateField("edad", event.target.value)}
                   placeholder="Edad"
+                  disabled={!permissions.canManageEmployees}
                 />
                 <Input
                   type="number"
@@ -368,6 +423,7 @@ export function EmployeesModule() {
                   value={formState.salarioBase}
                   onChange={(event) => updateField("salarioBase", event.target.value)}
                   placeholder="Salario base COP"
+                  disabled={!permissions.canManageEmployees}
                 />
               </div>
 
@@ -381,10 +437,12 @@ export function EmployeesModule() {
                     updateField("jornadaSemanalHoras", event.target.value)
                   }
                   placeholder="Horas/semana"
+                  disabled={!permissions.canManageEmployees}
                 />
                 <Select
                   value={formState.diasLaboralesSemana}
                   onValueChange={(value) => updateField("diasLaboralesSemana", value)}
+                  disabled={!permissions.canManageEmployees}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Dias/semana" />
@@ -397,6 +455,7 @@ export function EmployeesModule() {
                 <Select
                   value={formState.estado}
                   onValueChange={(value) => updateField("estado", value)}
+                  disabled={!permissions.canManageEmployees}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Estado" />
@@ -421,9 +480,13 @@ export function EmployeesModule() {
                 </div>
               ) : null}
 
-              <Button type="submit" className="w-full">
+              <Button
+                type="submit"
+                className="w-full"
+                disabled={!permissions.canManageEmployees || isSubmitting}
+              >
                 <UserPlus className="h-4 w-4" />
-                Guardar empleado
+                {isSubmitting ? "Guardando..." : "Guardar empleado"}
               </Button>
 
               <div className="rounded-2xl bg-background/60 p-4">
@@ -440,6 +503,11 @@ export function EmployeesModule() {
                 <p className="mt-2 text-sm text-muted-foreground">
                   Usa este formulario para empezar a poblar la operacion con datos reales.
                 </p>
+                {isSyncing ? (
+                  <p className="mt-2 text-xs uppercase tracking-[0.18em] text-muted-foreground">
+                    Sincronizando directorio...
+                  </p>
+                ) : null}
               </div>
             </form>
           </CardContent>

@@ -3,6 +3,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { Building2, CheckCircle2, MapPin, UserCog } from "lucide-react";
 
+import { useAuth } from "@/components/auth/auth-provider";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -38,9 +39,12 @@ function getCompanyProgress(profile: {
 }
 
 export function CompanyModule() {
-  const { companyProfile, saveCompanyProfile, employees, timeEntries } = useTempoWorkspace();
+  const { companyProfile, saveCompanyProfile, employees, timeEntries, isSyncing } =
+    useTempoWorkspace();
+  const { permissions } = useAuth();
   const [formState, setFormState] = useState(companyProfile);
   const [message, setMessage] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     setFormState(companyProfile);
@@ -53,10 +57,26 @@ export function CompanyModule() {
     }));
   }
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    saveCompanyProfile(formState);
-    setMessage("Perfil de empresa actualizado correctamente.");
+    if (!permissions.canManageCompany) {
+      setMessage("Tu rol tiene acceso de consulta al perfil de empresa.");
+      return;
+    }
+
+    try {
+      setIsSubmitting(true);
+      await saveCompanyProfile(formState);
+      setMessage("Perfil de empresa actualizado correctamente.");
+    } catch (error) {
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : "No fue posible actualizar el perfil de empresa.",
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   const progress = getCompanyProgress(formState);
@@ -77,11 +97,13 @@ export function CompanyModule() {
                 value={formState.nombreLegal}
                 onChange={(event) => updateField("nombreLegal", event.target.value)}
                 placeholder="Razon social"
+                disabled={!permissions.canManageCompany}
               />
               <Input
                 value={formState.nit}
                 onChange={(event) => updateField("nit", event.target.value)}
                 placeholder="NIT"
+                disabled={!permissions.canManageCompany}
               />
             </div>
 
@@ -90,11 +112,13 @@ export function CompanyModule() {
                 value={formState.sector}
                 onChange={(event) => updateField("sector", event.target.value)}
                 placeholder="Sector"
+                disabled={!permissions.canManageCompany}
               />
               <Input
                 value={formState.sedePrincipal}
                 onChange={(event) => updateField("sedePrincipal", event.target.value)}
                 placeholder="Sede principal"
+                disabled={!permissions.canManageCompany}
               />
             </div>
 
@@ -103,12 +127,14 @@ export function CompanyModule() {
                 value={formState.responsableNomina}
                 onChange={(event) => updateField("responsableNomina", event.target.value)}
                 placeholder="Responsable de nomina"
+                disabled={!permissions.canManageCompany}
               />
               <Input
                 type="email"
                 value={formState.emailNomina}
                 onChange={(event) => updateField("emailNomina", event.target.value)}
                 placeholder="Email operativo"
+                disabled={!permissions.canManageCompany}
               />
             </div>
 
@@ -116,6 +142,7 @@ export function CompanyModule() {
               value={formState.notas}
               onChange={(event) => updateField("notas", event.target.value)}
               placeholder="Notas internas, alcance del proyecto o instrucciones para el equipo."
+              disabled={!permissions.canManageCompany}
             />
 
             {message ? (
@@ -124,8 +151,12 @@ export function CompanyModule() {
               </div>
             ) : null}
 
-            <Button type="submit" className="w-full">
-              Guardar perfil de empresa
+            <Button
+              type="submit"
+              className="w-full"
+              disabled={!permissions.canManageCompany || isSubmitting}
+            >
+              {isSubmitting ? "Guardando..." : "Guardar perfil de empresa"}
             </Button>
           </form>
         </CardContent>
@@ -188,6 +219,11 @@ export function CompanyModule() {
                 {item}
               </div>
             ))}
+            {isSyncing ? (
+              <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
+                Sincronizando empresa...
+              </p>
+            ) : null}
           </CardContent>
         </Card>
       </div>

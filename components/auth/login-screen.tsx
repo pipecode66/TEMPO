@@ -1,6 +1,6 @@
 "use client";
 
-import { type FormEvent, useState } from "react";
+import { startTransition, type FormEvent, useEffect, useState } from "react";
 import {
   AlertCircle,
   ArrowRight,
@@ -16,15 +16,12 @@ import { useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-
-const ADMIN_ACCOUNT = {
-  email: "admin@empresa.com",
-  password: "Admin123!",
-  role: "Administrador",
-};
+import { useAuth } from "@/components/auth/auth-provider";
+import { getApiErrorMessage } from "@/lib/fetch-json";
 
 export function LoginScreen() {
   const router = useRouter();
+  const { isAuthenticated, isLoading: isAuthLoading, login, user } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -32,27 +29,37 @@ export function LoginScreen() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
+  useEffect(() => {
+    if (!isAuthLoading && isAuthenticated) {
+      startTransition(() => {
+        router.replace("/dashboard");
+      });
+    }
+  }, [isAuthenticated, isAuthLoading, router]);
+
   const handleLogin = async (e: FormEvent) => {
     e.preventDefault();
     setError("");
     setSuccess("");
     setIsLoading(true);
 
-    await new Promise((resolve) => setTimeout(resolve, 1200));
-
-    const isValidAdmin =
-      email === ADMIN_ACCOUNT.email && password === ADMIN_ACCOUNT.password;
-
-    if (isValidAdmin) {
-      setSuccess(`Acceso correcto. Redirigiendo al panel de ${ADMIN_ACCOUNT.role}...`);
-      setTimeout(() => {
-        router.push("/dashboard");
-      }, 1200);
-    } else {
-      setError("Credenciales invalidas.");
+    try {
+      const authenticatedUser = await login({
+        email,
+        password,
+      });
+      setSuccess(
+        `Acceso correcto. Redirigiendo al panel de ${authenticatedUser.full_name}...`,
+      );
+      startTransition(() => {
+        router.replace("/dashboard");
+      });
+    } catch (authError) {
+      setError(getApiErrorMessage(authError));
+      setSuccess("");
+    } finally {
+      setIsLoading(false);
     }
-
-    setIsLoading(false);
   };
 
   return (
@@ -208,10 +215,10 @@ export function LoginScreen() {
 
             <Button
               type="submit"
-              disabled={isLoading}
+              disabled={isLoading || isAuthLoading}
               className="w-full h-12 bg-foreground text-background hover:bg-foreground/90 rounded-xl font-medium text-base group"
             >
-              {isLoading ? (
+              {isLoading || isAuthLoading ? (
                 <div className="flex items-center gap-2">
                   <div className="w-4 h-4 border-2 border-background/30 border-t-background rounded-full animate-spin" />
                   <span>Verificando...</span>
@@ -224,6 +231,12 @@ export function LoginScreen() {
               )}
             </Button>
           </form>
+
+          {user ? (
+            <p className="mt-6 text-center text-xs text-muted-foreground">
+              Sesion activa para {user.email}.
+            </p>
+          ) : null}
         </div>
       </div>
     </div>

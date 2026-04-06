@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   Bell,
   ChevronRight,
@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import type { ReactNode } from "react";
 
+import { useAuth } from "@/components/auth/auth-provider";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -55,8 +56,11 @@ function WorkspaceLink({
 
 export function WorkspaceShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
   const moduleMeta = getWorkspaceModule(pathname);
-  const { employees, timeEntries, companyProfile } = useTempoWorkspace();
+  const { employees, timeEntries, companyProfile, hydrated, isSyncing } =
+    useTempoWorkspace();
+  const { logout, permissions, user } = useAuth();
 
   const alertCount = timeEntries.filter(
     (entry) => entry.response.alerta_limite_legal,
@@ -66,6 +70,11 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
     employees.length > 0,
     timeEntries.length > 0,
   ].filter(Boolean).length;
+
+  async function handleLogout() {
+    await logout();
+    router.replace("/");
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -119,16 +128,28 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
         <div className="rounded-3xl border border-border bg-card/70 p-4">
           <div className="flex items-start justify-between gap-3">
             <div>
-              <p className="text-sm font-medium text-foreground">admin@empresa.com</p>
-              <p className="mt-1 text-sm text-muted-foreground">Acceso principal del sistema</p>
+              <p className="text-sm font-medium text-foreground">
+                {user?.email ?? "Sin sesion activa"}
+              </p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {user ? `Rol ${user.role}` : "Acceso del sistema"}
+              </p>
             </div>
             <ShieldCheck className="mt-0.5 h-4 w-4 text-foreground" />
           </div>
-          <Button asChild variant="ghost" className="mt-4 w-full justify-start px-0">
-            <Link href="/">
-              <LogOut className="h-4 w-4" />
-              Cerrar sesion
-            </Link>
+          <div className="mt-4 flex flex-wrap gap-2">
+            {permissions.canManageTimeEntries ? (
+              <Badge variant="secondary">Operacion</Badge>
+            ) : (
+              <Badge variant="outline">Solo lectura</Badge>
+            )}
+            {permissions.canViewAudit ? (
+              <Badge variant="secondary">Auditoria</Badge>
+            ) : null}
+          </div>
+          <Button variant="ghost" className="mt-4 w-full justify-start px-0" onClick={handleLogout}>
+            <LogOut className="h-4 w-4" />
+            Cerrar sesion
           </Button>
         </div>
       </aside>
@@ -151,6 +172,11 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
                 <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground">
                   {moduleMeta.description}
                 </p>
+                {!hydrated || isSyncing ? (
+                  <p className="mt-3 text-xs uppercase tracking-[0.24em] text-muted-foreground">
+                    Sincronizando datos centralizados...
+                  </p>
+                ) : null}
               </div>
 
               <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:items-center">
@@ -158,12 +184,20 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
                   <Bell className="h-4 w-4" />
                   {alertCount > 0 ? `${alertCount} alertas legales activas` : "Sin alertas activas"}
                 </div>
-                <Button asChild variant="outline">
-                  <Link href="/empleados">Nuevo empleado</Link>
-                </Button>
-                <Button asChild>
-                  <Link href="/control-tiempo">Registrar jornada</Link>
-                </Button>
+                {permissions.canManageEmployees ? (
+                  <Button asChild variant="outline">
+                    <Link href="/empleados">Nuevo empleado</Link>
+                  </Button>
+                ) : null}
+                {permissions.canManageTimeEntries ? (
+                  <Button asChild>
+                    <Link href="/control-tiempo">Registrar jornada</Link>
+                  </Button>
+                ) : (
+                  <Button asChild>
+                    <Link href="/reportes">Ver reportes</Link>
+                  </Button>
+                )}
               </div>
             </div>
 

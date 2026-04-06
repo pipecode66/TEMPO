@@ -1,8 +1,14 @@
 "use client";
 
-import { useState } from "react";
-import { Download, FileJson, FileSpreadsheet, ShieldCheck } from "lucide-react";
+import { useMemo, useState } from "react";
+import {
+  Download,
+  FileJson,
+  FileSpreadsheet,
+  ShieldAlert,
+} from "lucide-react";
 
+import { useAuth } from "@/components/auth/auth-provider";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -12,6 +18,14 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -21,7 +35,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { formatCurrency, formatHours } from "@/lib/tempo-format";
+import { formatCurrency, formatHours, formatShortDateTime } from "@/lib/tempo-format";
 import { useTempoWorkspace } from "@/components/workspace/tempo-provider";
 
 function downloadFile(filename: string, content: string, contentType: string) {
@@ -37,103 +51,89 @@ function downloadFile(filename: string, content: string, contentType: string) {
 }
 
 export function ReportsModule() {
-  const { employees, timeEntries, companyProfile } = useTempoWorkspace();
+  const { permissions } = useAuth();
+  const {
+    auditEvents,
+    employees,
+    exportReport,
+    fetchReports,
+    isSyncing,
+    refreshAudit,
+    report,
+    timeEntries,
+  } = useTempoWorkspace();
   const [feedback, setFeedback] = useState("");
-
-  const complianceRate =
-    timeEntries.length === 0
-      ? 100
-      : Math.round(
-          ((timeEntries.length -
-            timeEntries.filter((entry) => entry.response.alerta_limite_legal).length) /
-            timeEntries.length) *
-            100,
-        );
-
-  const totalLiquidatedValue = timeEntries.reduce(
-    (total, entry) => total + entry.response.valor_total_dia,
-    0,
-  );
-  const totalHours = timeEntries.reduce(
-    (total, entry) => total + entry.response.horas_totales_dia,
-    0,
-  );
-
-  const employeeSummary = employees.map((employee) => {
-    const employeeEntries = timeEntries.filter((entry) => entry.employeeId === employee.id);
-
-    return {
-      id: employee.id,
-      nombre: employee.nombre,
-      area: employee.area,
-      jornadas: employeeEntries.length,
-      horas: employeeEntries.reduce(
-        (total, entry) => total + entry.response.horas_totales_dia,
-        0,
-      ),
-      valor: employeeEntries.reduce(
-        (total, entry) => total + entry.response.valor_total_dia,
-        0,
-      ),
-      alertas: employeeEntries.filter((entry) => entry.response.alerta_limite_legal).length,
-    };
+  const [filters, setFilters] = useState({
+    startDate: "",
+    endDate: "",
+    employeeId: "all",
+    area: "all",
+    legalAlert: "all",
   });
+  const [isExporting, setIsExporting] = useState(false);
 
-  const alertEntries = timeEntries.filter((entry) => entry.response.alerta_limite_legal);
+  const reportRows = report?.rows ?? [];
+  const summary = report?.summary ?? {
+    total_employees: employees.length,
+    total_time_entries: 0,
+    total_hours: 0,
+    total_value: 0,
+    legal_alerts: 0,
+    compliance_rate: 100,
+  };
 
-  function exportJson() {
-    downloadFile(
-      "tempo-reporte-resumen.json",
-      JSON.stringify(
-        {
-          empresa: companyProfile,
-          empleados: employees,
-          jornadas: timeEntries,
-          resumen: {
-            cumplimiento: complianceRate,
-            valorLiquidado: totalLiquidatedValue,
-            horasLiquidadas: totalHours,
-          },
-        },
-        null,
-        2,
-      ),
-      "application/json",
-    );
-    setFeedback("Resumen exportado en JSON.");
+  const areas = useMemo(() => {
+    return Array.from(new Set(timeEntries.map((entry) => entry.area))).sort();
+  }, [timeEntries]);
+
+  const alertRows = reportRows.filter((row) => row.legal_alert);
+
+  async function applyFilters() {
+    setFeedback("");
+    try {
+      await fetchReports({
+        start_date: filters.startDate || undefined,
+        end_date: filters.endDate || undefined,
+        employee_id: filters.employeeId === "all" ? undefined : filters.employeeId,
+        area: filters.area === "all" ? undefined : filters.area,
+        legal_alert:
+          filters.legalAlert === "all"
+            ? undefined
+            : filters.legalAlert === "true",
+      });
+    } catch (error) {
+      setFeedback(
+        error instanceof Error ? error.message : "No fue posible cargar el reporte.",
+      );
+    }
   }
 
-  function exportCsv() {
-    const header = [
-      "fecha",
-      "empleado",
-      "area",
-      "entrada",
-      "salida",
-      "horas_totales",
-      "valor_total_dia",
-      "alerta_legal",
-    ];
-
-    const rows = timeEntries.map((entry) =>
-      [
-        entry.fecha,
-        entry.employeeName,
-        entry.area,
-        entry.horaEntrada,
-        entry.horaSalida,
-        entry.response.horas_totales_dia,
-        entry.response.valor_total_dia,
-        entry.response.alerta_limite_legal ? "si" : "no",
-      ].join(","),
-    );
-
-    downloadFile(
-      "tempo-jornadas.csv",
-      [header.join(","), ...rows].join("\n"),
-      "text/csv;charset=utf-8",
-    );
-    setFeedback("Historico exportado en CSV.");
+  async function handleExport(format: "csv" | "json") {
+    try {
+      setIsExporting(true);
+      const content = await exportReport(format, {
+        start_date: filters.startDate || undefined,
+        end_date: filters.endDate || undefined,
+        employee_id: filters.employeeId === "all" ? undefined : filters.employeeId,
+        area: filters.area === "all" ? undefined : filters.area,
+        legal_alert:
+          filters.legalAlert === "all"
+            ? undefined
+            : filters.legalAlert === "true",
+      });
+      if (format === "csv") {
+        downloadFile("tempo-report.csv", content, "text/csv;charset=utf-8");
+      } else {
+        downloadFile("tempo-report.json", content, "application/json");
+      }
+      setFeedback(`Reporte exportado en ${format.toUpperCase()}.`);
+    } catch (error) {
+      setFeedback(
+        error instanceof Error ? error.message : "No fue posible exportar el reporte.",
+      );
+    } finally {
+      setIsExporting(false);
+    }
   }
 
   return (
@@ -142,50 +142,150 @@ export function ReportsModule() {
         <Card className="bg-card/80">
           <CardHeader className="space-y-1">
             <CardDescription>Cumplimiento</CardDescription>
-            <CardTitle className="text-3xl font-display">{complianceRate}%</CardTitle>
+            <CardTitle className="text-3xl font-display">
+              {summary.compliance_rate}%
+            </CardTitle>
           </CardHeader>
         </Card>
         <Card className="bg-card/80">
           <CardHeader className="space-y-1">
             <CardDescription>Horas liquidadas</CardDescription>
-            <CardTitle className="text-3xl font-display">{formatHours(totalHours)}</CardTitle>
+            <CardTitle className="text-3xl font-display">
+              {formatHours(summary.total_hours)}
+            </CardTitle>
           </CardHeader>
         </Card>
         <Card className="bg-card/80">
           <CardHeader className="space-y-1">
             <CardDescription>Valor acumulado</CardDescription>
             <CardTitle className="text-3xl font-display">
-              {formatCurrency(totalLiquidatedValue)}
+              {formatCurrency(summary.total_value)}
             </CardTitle>
           </CardHeader>
         </Card>
         <Card className="bg-card/80">
           <CardHeader className="space-y-1">
             <CardDescription>Jornadas con alerta</CardDescription>
-            <CardTitle className="text-3xl font-display">{alertEntries.length}</CardTitle>
+            <CardTitle className="text-3xl font-display">
+              {summary.legal_alerts}
+            </CardTitle>
           </CardHeader>
         </Card>
       </div>
+
+      <Card className="bg-card/80">
+        <CardHeader>
+          <CardTitle>Filtros operativos</CardTitle>
+          <CardDescription>
+            Consulta reportes por fechas, empleado, area y alertas legales.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+            <Input
+              type="date"
+              value={filters.startDate}
+              onChange={(event) =>
+                setFilters((current) => ({ ...current, startDate: event.target.value }))
+              }
+            />
+            <Input
+              type="date"
+              value={filters.endDate}
+              onChange={(event) =>
+                setFilters((current) => ({ ...current, endDate: event.target.value }))
+              }
+            />
+            <Select
+              value={filters.employeeId}
+              onValueChange={(value) =>
+                setFilters((current) => ({ ...current, employeeId: value }))
+              }
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Empleado" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos los empleados</SelectItem>
+                {employees.map((employee) => (
+                  <SelectItem key={employee.id} value={employee.id}>
+                    {employee.nombre}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select
+              value={filters.area}
+              onValueChange={(value) =>
+                setFilters((current) => ({ ...current, area: value }))
+              }
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Area" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todas las areas</SelectItem>
+                {areas.map((area) => (
+                  <SelectItem key={area} value={area}>
+                    {area}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select
+              value={filters.legalAlert}
+              onValueChange={(value) =>
+                setFilters((current) => ({ ...current, legalAlert: value }))
+              }
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Alertas" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todas</SelectItem>
+                <SelectItem value="true">Solo con alerta</SelectItem>
+                <SelectItem value="false">Solo sin alerta</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="flex flex-col gap-3 sm:flex-row">
+            <Button onClick={() => void applyFilters()} disabled={isSyncing}>
+              Aplicar filtros
+            </Button>
+            <Button variant="outline" onClick={() => void refreshAudit()} disabled={!permissions.canViewAudit}>
+              Refrescar auditoria
+            </Button>
+          </div>
+
+          {feedback ? (
+            <div className="rounded-2xl bg-background/60 px-4 py-3 text-sm text-muted-foreground">
+              {feedback}
+            </div>
+          ) : null}
+        </CardContent>
+      </Card>
 
       <Tabs defaultValue="resumen" className="space-y-4">
         <TabsList>
           <TabsTrigger value="resumen">Resumen</TabsTrigger>
           <TabsTrigger value="cumplimiento">Cumplimiento</TabsTrigger>
+          <TabsTrigger value="auditoria">Auditoria</TabsTrigger>
           <TabsTrigger value="exportacion">Exportacion</TabsTrigger>
         </TabsList>
 
         <TabsContent value="resumen">
           <Card className="bg-card/80">
             <CardHeader>
-              <CardTitle>Resumen por empleado</CardTitle>
+              <CardTitle>Detalle consolidado</CardTitle>
               <CardDescription>
-                Consolida jornadas, horas liquidadas y valor generado por persona.
+                Respuesta server-side preparada para operacion y futura integracion con nomina.
               </CardDescription>
             </CardHeader>
             <CardContent>
-              {employeeSummary.length === 0 ? (
+              {reportRows.length === 0 ? (
                 <div className="rounded-2xl bg-background/60 px-4 py-8 text-sm text-muted-foreground">
-                  Agrega empleados y registra jornadas para construir el primer reporte.
+                  No hay registros para los filtros seleccionados.
                 </div>
               ) : (
                 <Table>
@@ -193,23 +293,23 @@ export function ReportsModule() {
                     <TableRow>
                       <TableHead>Empleado</TableHead>
                       <TableHead>Area</TableHead>
-                      <TableHead>Jornadas</TableHead>
+                      <TableHead>Fecha</TableHead>
                       <TableHead>Horas</TableHead>
                       <TableHead>Valor</TableHead>
-                      <TableHead>Alertas</TableHead>
+                      <TableHead>Alerta</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {employeeSummary.map((row) => (
-                      <TableRow key={row.id}>
-                        <TableCell>{row.nombre}</TableCell>
+                    {reportRows.map((row) => (
+                      <TableRow key={row.time_entry_id}>
+                        <TableCell>{row.employee_name}</TableCell>
                         <TableCell>{row.area}</TableCell>
-                        <TableCell>{row.jornadas}</TableCell>
-                        <TableCell>{formatHours(row.horas)}</TableCell>
-                        <TableCell>{formatCurrency(row.valor)}</TableCell>
+                        <TableCell>{row.work_date}</TableCell>
+                        <TableCell>{formatHours(row.total_hours)}</TableCell>
+                        <TableCell>{formatCurrency(row.total_value)}</TableCell>
                         <TableCell>
-                          <Badge variant={row.alertas > 0 ? "destructive" : "secondary"}>
-                            {row.alertas}
+                          <Badge variant={row.legal_alert ? "destructive" : "secondary"}>
+                            {row.legal_alert ? "Con alerta" : "OK"}
                           </Badge>
                         </TableCell>
                       </TableRow>
@@ -226,40 +326,90 @@ export function ReportsModule() {
             <CardHeader>
               <CardTitle>Jornadas con alertas legales</CardTitle>
               <CardDescription>
-                Seguimiento prioritario para topes de extras, menores o alertas de configuracion.
+                Seguimiento prioritario para topes, proteccion de menores e inconsistencias.
               </CardDescription>
             </CardHeader>
             <CardContent>
-              {alertEntries.length === 0 ? (
+              {alertRows.length === 0 ? (
                 <div className="rounded-2xl bg-green-500/10 px-4 py-8 text-sm text-green-300">
-                  No hay jornadas con alertas. El entorno mantiene un pulso saludable.
+                  No hay jornadas con alertas para este corte.
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {alertEntries.map((entry) => (
+                  {alertRows.map((row) => (
                     <div
-                      key={entry.id}
+                      key={row.time_entry_id}
                       className="rounded-2xl border border-border bg-background/50 p-4"
                     >
                       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                         <div>
                           <p className="text-sm font-medium text-foreground">
-                            {entry.employeeName}
+                            {row.employee_name}
                           </p>
                           <p className="text-xs text-muted-foreground">
-                            {entry.fecha} | {entry.horaEntrada} - {entry.horaSalida}
+                            {row.work_date} | {row.check_in} - {row.check_out}
                           </p>
                         </div>
                         <Badge variant="destructive">
-                          <ShieldCheck className="h-3 w-3" />
+                          <ShieldAlert className="h-3 w-3" />
                           Revision necesaria
                         </Badge>
                       </div>
-                      <ul className="mt-3 space-y-2 text-sm text-muted-foreground">
-                        {entry.response.alertas.map((alert) => (
-                          <li key={alert}>{alert}</li>
-                        ))}
-                      </ul>
+                      <div className="mt-3 text-sm text-muted-foreground">
+                        Valor del turno: {formatCurrency(row.total_value)} en{" "}
+                        {formatHours(row.total_hours)}.
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="auditoria">
+          <Card className="bg-card/80">
+            <CardHeader>
+              <CardTitle>Auditoria</CardTitle>
+              <CardDescription>
+                Eventos criticos de autenticacion, cambios maestros y movimientos de jornadas.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {!permissions.canViewAudit ? (
+                <div className="rounded-2xl bg-background/60 px-4 py-8 text-sm text-muted-foreground">
+                  Tu rol no tiene acceso al log de auditoria.
+                </div>
+              ) : auditEvents.length === 0 ? (
+                <div className="rounded-2xl bg-background/60 px-4 py-8 text-sm text-muted-foreground">
+                  Aun no hay eventos para mostrar.
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {auditEvents.map((event) => (
+                    <div
+                      key={event.id}
+                      className="rounded-2xl border border-border bg-background/50 p-4"
+                    >
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                          <p className="text-sm font-medium text-foreground">
+                            {event.action}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {event.entityType}
+                            {event.entityId ? ` | ${event.entityId}` : ""}
+                          </p>
+                        </div>
+                        <Badge variant="outline">
+                          {formatShortDateTime(event.createdAt)}
+                        </Badge>
+                      </div>
+                      {event.after ? (
+                        <pre className="mt-3 overflow-x-auto rounded-2xl bg-black/20 p-3 text-xs text-muted-foreground">
+                          {JSON.stringify(event.after, null, 2)}
+                        </pre>
+                      ) : null}
                     </div>
                   ))}
                 </div>
@@ -274,23 +424,27 @@ export function ReportsModule() {
               <CardHeader>
                 <CardTitle>Exportar datos</CardTitle>
                 <CardDescription>
-                  Descarga un snapshot del workspace para auditoria, nomina o respaldo.
+                  Descarga reportes generados por backend en CSV o JSON.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
-                <Button className="w-full justify-between" onClick={exportJson}>
-                  Exportar resumen JSON
+                <Button
+                  className="w-full justify-between"
+                  onClick={() => void handleExport("json")}
+                  disabled={isExporting}
+                >
+                  Exportar reporte JSON
                   <FileJson className="h-4 w-4" />
                 </Button>
-                <Button variant="outline" className="w-full justify-between" onClick={exportCsv}>
-                  Exportar jornadas CSV
+                <Button
+                  variant="outline"
+                  className="w-full justify-between"
+                  onClick={() => void handleExport("csv")}
+                  disabled={isExporting}
+                >
+                  Exportar reporte CSV
                   <FileSpreadsheet className="h-4 w-4" />
                 </Button>
-                {feedback ? (
-                  <div className="rounded-2xl bg-background/60 px-4 py-3 text-sm text-muted-foreground">
-                    {feedback}
-                  </div>
-                ) : null}
               </CardContent>
             </Card>
 
@@ -298,15 +452,15 @@ export function ReportsModule() {
               <CardHeader>
                 <CardTitle>Incluido en la exportacion</CardTitle>
                 <CardDescription>
-                  Cobertura actual del paquete descargable.
+                  Cobertura actual del corte preparado para operacion y nomina.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 {[
-                  `Empresa: ${companyProfile.nombreLegal || "pendiente"}`,
-                  `Empleados: ${employees.length}`,
-                  `Jornadas: ${timeEntries.length}`,
-                  `Alertas legales: ${alertEntries.length}`,
+                  `Empleados cubiertos: ${summary.total_employees}`,
+                  `Jornadas incluidas: ${summary.total_time_entries}`,
+                  `Horas liquidadas: ${formatHours(summary.total_hours)}`,
+                  `Alertas legales: ${summary.legal_alerts}`,
                 ].map((item) => (
                   <div
                     key={item}
@@ -316,6 +470,9 @@ export function ReportsModule() {
                     <Download className="h-4 w-4 text-muted-foreground" />
                   </div>
                 ))}
+                <div className="rounded-2xl bg-secondary/50 px-4 py-4 text-sm text-muted-foreground">
+                  La salida JSON queda lista para conectarse a procesos de nomina o conciliacion.
+                </div>
               </CardContent>
             </Card>
           </div>
