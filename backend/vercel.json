@@ -1,8 +1,15 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "functions": {
+    "index.py": {
+      "memory": 1024,
+      "maxDuration": 30,
+      "excludeFiles": "{tests/**,__pycache__/**,alembic/**}"
+    }
+  },
   "headers": [
     {
-      "source": "/api/(.*)",
+      "source": "/(.*)",
       "headers": [
         {
           "key": "Cache-Control",

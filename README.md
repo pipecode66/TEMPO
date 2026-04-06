@@ -10,7 +10,7 @@ Software de control de tiempos y horas extra para Colombia, pensado para reempla
 - Migraciones: Alembic.
 - Auth: JWT con cookies seguras `HttpOnly` para `access` y `refresh`.
 - Seguridad base: CORS, rate limiting in-memory, validacion estricta y logging estructurado.
-- Despliegue: Next.js + funciones Python en Vercel bajo `/api`.
+- Despliegue soportado en Vercel: frontend Next.js en un proyecto y backend FastAPI en otro, unidos por un proxy server-side en `/api/*`.
 
 ## Capacidades implementadas
 
@@ -29,7 +29,7 @@ Usa `.env.example` como base.
 
 ```bash
 NEXT_PUBLIC_API_BASE_URL=/api
-TEMPO_BACKEND_PROXY_URL=http://127.0.0.1:8000
+TEMPO_BACKEND_ORIGIN=http://127.0.0.1:8000
 DATABASE_URL=postgresql+psycopg://tempo:tempo@localhost:5432/tempo
 JWT_SECRET_KEY=change-this-secret-in-production
 ```
@@ -37,8 +37,9 @@ JWT_SECRET_KEY=change-this-secret-in-production
 Notas:
 
 - `NEXT_PUBLIC_API_BASE_URL=/api` mantiene auth por cookies en el mismo origen.
-- `TEMPO_BACKEND_PROXY_URL` solo se usa en desarrollo para que `next dev` haga proxy al backend local.
-- En produccion, Vercel sirve el frontend y el backend desde el mismo dominio.
+- `TEMPO_BACKEND_ORIGIN` es la URL base real del backend FastAPI. El frontend la consume a traves de [app/api/[...path]/route.ts](/C:/Users/juanitou/Documents/TRABAJO/TEMPO/app/api/[...path]/route.ts), manteniendo `/api/*` en el mismo dominio para cookies y auth.
+- En local, apunta a `http://127.0.0.1:8000`.
+- En produccion, apunta al dominio del proyecto backend desplegado por separado.
 
 ## Desarrollo local
 
@@ -61,7 +62,7 @@ npm install
 npm run dev
 ```
 
-Con `TEMPO_BACKEND_PROXY_URL=http://127.0.0.1:8000`, el frontend consumira el backend local desde `/api/*`.
+Con `TEMPO_BACKEND_ORIGIN=http://127.0.0.1:8000`, el frontend consumira el backend local desde `/api/*`.
 
 ## Endpoints principales
 
@@ -84,20 +85,29 @@ Mas detalle y ejemplos en [backend/README.md](/C:/Users/juanitou/Documents/TRABA
 
 ## Despliegue en Vercel
 
-Archivos clave:
+Archivos clave del frontend:
 
 - [vercel.json](/C:/Users/juanitou/Documents/TRABAJO/TEMPO/vercel.json)
-- [api/index.py](/C:/Users/juanitou/Documents/TRABAJO/TEMPO/api/index.py)
-- [api/[...path].py](/C:/Users/juanitou/Documents/TRABAJO/TEMPO/api/[...path].py)
-- [api/requirements.txt](/C:/Users/juanitou/Documents/TRABAJO/TEMPO/api/requirements.txt)
+- [app/api/[...path]/route.ts](/C:/Users/juanitou/Documents/TRABAJO/TEMPO/app/api/[...path]/route.ts)
 - [next.config.mjs](/C:/Users/juanitou/Documents/TRABAJO/TEMPO/next.config.mjs)
 
-Flujo:
+Archivos clave del backend:
 
-1. Configura `DATABASE_URL`, `JWT_SECRET_KEY`, `COOKIE_SECURE=true` y `CORS_ORIGINS`.
-2. Ejecuta migraciones contra la base objetivo.
-3. Despliega a Vercel.
-4. El frontend consumira la API por `/api/v1/*` en el mismo dominio.
+- [backend/index.py](/C:/Users/juanitou/Documents/TRABAJO/TEMPO/backend/index.py)
+- [backend/vercel.json](/C:/Users/juanitou/Documents/TRABAJO/TEMPO/backend/vercel.json)
+- [backend/requirements.txt](/C:/Users/juanitou/Documents/TRABAJO/TEMPO/backend/requirements.txt)
+
+Flujo soportado:
+
+1. Despliega el backend como un proyecto Vercel separado con `Root Directory = backend`.
+2. En el backend configura `DATABASE_URL`, `JWT_SECRET_KEY`, `COOKIE_SECURE=true` y `CORS_ORIGINS` incluyendo el dominio del frontend.
+3. Despliega el frontend en el proyecto principal.
+4. En el frontend configura `TEMPO_BACKEND_ORIGIN=https://tu-backend.example.com`.
+5. El frontend seguira consumiendo `/api/v1/*` en el mismo dominio, pero el proxy Next reenviara la solicitud al backend real.
+
+Nota:
+
+- Segun la documentacion oficial de Vercel, mezclar Next.js y FastAPI dentro del mismo proyecto bajo un solo dominio requiere `Services`, una capacidad en beta privada. Por eso el despliegue anterior devolvia `404` para `/api/v1/*`.
 
 ## Validacion ejecutada
 
