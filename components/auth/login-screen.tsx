@@ -79,33 +79,39 @@ function AnimatedClock() {
         />
       ))}
       
-      {/* Center dot */}
-      <div className="absolute left-1/2 top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary shadow-lg shadow-primary/50" />
-      
       {/* Hour hand */}
       <div
-        className="absolute left-1/2 top-1/2 h-14 w-1 -translate-x-1/2 origin-bottom rounded-full bg-foreground"
+        className="absolute left-1/2 top-1/2 w-1 rounded-full bg-foreground"
         style={{
-          transform: `translateX(-50%) rotate(${hours * 30 + minutes * 0.5}deg) translateY(-100%)`,
+          height: '50px',
+          transformOrigin: '50% 100%',
+          transform: `translate(-50%, -100%) rotate(${hours * 30 + minutes * 0.5}deg)`,
         }}
       />
       
       {/* Minute hand */}
       <div
-        className="absolute left-1/2 top-1/2 h-20 w-0.5 -translate-x-1/2 origin-bottom rounded-full bg-foreground"
+        className="absolute left-1/2 top-1/2 w-0.5 rounded-full bg-foreground"
         style={{
-          transform: `translateX(-50%) rotate(${minutes * 6}deg) translateY(-100%)`,
+          height: '70px',
+          transformOrigin: '50% 100%',
+          transform: `translate(-50%, -100%) rotate(${minutes * 6}deg)`,
         }}
       />
       
       {/* Second hand */}
       <div
-        className="absolute left-1/2 top-1/2 h-20 w-px -translate-x-1/2 origin-bottom bg-primary"
+        className="absolute left-1/2 top-1/2 w-px bg-primary"
         style={{
-          transform: `translateX(-50%) rotate(${seconds * 6}deg) translateY(-100%)`,
+          height: '70px',
+          transformOrigin: '50% 100%',
+          transform: `translate(-50%, -100%) rotate(${seconds * 6}deg)`,
           transition: 'transform 0.2s cubic-bezier(0.4, 2.08, 0.55, 0.44)',
         }}
       />
+      
+      {/* Center dot */}
+      <div className="absolute left-1/2 top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary shadow-lg shadow-primary/50" />
     </div>
   );
 }
