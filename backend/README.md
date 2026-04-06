@@ -23,7 +23,9 @@ uvicorn app.main:app --reload --app-dir backend
 
 ## Endpoint principal
 
-`POST /api/v1/jornada/calcular`
+`POST /v1/jornada/calcular` en local con Uvicorn.
+
+`POST /api/v1/jornada/calcular` cuando se despliega en Vercel usando `api/index.py`.
 
 Ejemplo de payload:
 

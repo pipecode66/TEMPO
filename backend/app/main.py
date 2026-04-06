@@ -30,7 +30,17 @@ def health() -> dict[str, str]:
     return {"status": "healthy"}
 
 
-@app.post("/api/v1/jornada/calcular", response_model=CalculoJornadaResponse)
+@app.get("/api/health", include_in_schema=False)
+def health_vercel_alias() -> dict[str, str]:
+    return {"status": "healthy"}
+
+
+@app.post("/v1/jornada/calcular", response_model=CalculoJornadaResponse)
+@app.post(
+    "/api/v1/jornada/calcular",
+    response_model=CalculoJornadaResponse,
+    include_in_schema=False,
+)
 def calculate_workday(payload: CalculoJornadaRequest) -> CalculoJornadaResponse:
     try:
         return calcular_jornada_diaria(payload)
