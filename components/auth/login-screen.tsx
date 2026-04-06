@@ -1,6 +1,6 @@
 "use client";
 
-import { type FormEvent, useState } from "react";
+import { type FormEvent, useState, useEffect } from "react";
 import {
   AlertCircle,
   ArrowRight,
@@ -9,8 +9,12 @@ import {
   Clock,
   Eye,
   EyeOff,
+  Gauge,
   Shield,
+  Timer,
+  TrendingUp,
   Users,
+  Zap,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 
@@ -22,6 +26,90 @@ const ADMIN_ACCOUNT = {
   password: "Admin123!",
   role: "Administrador",
 };
+
+const features = [
+  {
+    icon: Gauge,
+    title: "Control preciso",
+    description: "Seguimiento de jornadas en tiempo real",
+  },
+  {
+    icon: TrendingUp,
+    title: "Horas extras",
+    description: "Calculo automatico de recargos",
+  },
+  {
+    icon: Shield,
+    title: "100% Legal",
+    description: "Cumplimiento CST Colombia",
+  },
+  {
+    icon: Zap,
+    title: "Tiempo real",
+    description: "Alertas y notificaciones instantaneas",
+  },
+];
+
+function AnimatedClock() {
+  const [time, setTime] = useState(new Date());
+
+  useEffect(() => {
+    const timer = setInterval(() => setTime(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const seconds = time.getSeconds();
+  const minutes = time.getMinutes();
+  const hours = time.getHours() % 12;
+
+  return (
+    <div className="relative h-48 w-48">
+      {/* Outer ring with glow */}
+      <div className="absolute inset-0 rounded-full border-2 border-primary/30" />
+      <div className="absolute inset-2 rounded-full border border-border" />
+      <div className="absolute inset-0 rounded-full bg-gradient-to-br from-primary/10 to-transparent" />
+      
+      {/* Clock marks */}
+      {[...Array(12)].map((_, i) => (
+        <div
+          key={i}
+          className="absolute left-1/2 top-1/2 h-2 w-0.5 -translate-x-1/2 origin-bottom bg-muted-foreground/40"
+          style={{
+            transform: `translateX(-50%) rotate(${i * 30}deg) translateY(-88px)`,
+          }}
+        />
+      ))}
+      
+      {/* Center dot */}
+      <div className="absolute left-1/2 top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary shadow-lg shadow-primary/50" />
+      
+      {/* Hour hand */}
+      <div
+        className="absolute left-1/2 top-1/2 h-14 w-1 -translate-x-1/2 origin-bottom rounded-full bg-foreground"
+        style={{
+          transform: `translateX(-50%) rotate(${hours * 30 + minutes * 0.5}deg) translateY(-100%)`,
+        }}
+      />
+      
+      {/* Minute hand */}
+      <div
+        className="absolute left-1/2 top-1/2 h-20 w-0.5 -translate-x-1/2 origin-bottom rounded-full bg-foreground"
+        style={{
+          transform: `translateX(-50%) rotate(${minutes * 6}deg) translateY(-100%)`,
+        }}
+      />
+      
+      {/* Second hand */}
+      <div
+        className="absolute left-1/2 top-1/2 h-20 w-px -translate-x-1/2 origin-bottom bg-primary"
+        style={{
+          transform: `translateX(-50%) rotate(${seconds * 6}deg) translateY(-100%)`,
+          transition: 'transform 0.2s cubic-bezier(0.4, 2.08, 0.55, 0.44)',
+        }}
+      />
+    </div>
+  );
+}
 
 export function LoginScreen() {
   const router = useRouter();
@@ -57,101 +145,108 @@ export function LoginScreen() {
 
   return (
     <div className="min-h-screen bg-background flex">
+      {/* Left panel - Brand showcase */}
       <div className="hidden lg:flex lg:w-1/2 relative overflow-hidden">
+        {/* Background effects */}
         <div className="absolute inset-0 bg-gradient-to-br from-background via-card to-background" />
-        <div
-          className="absolute inset-0 opacity-5"
-          style={{
-            backgroundImage:
-              'url("data:image/svg+xml,%3Csvg width=\'60\' height=\'60\' viewBox=\'0 0 60 60\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cg fill=\'none\' fill-rule=\'evenodd\'%3E%3Cg fill=\'%23ffffff\' fill-opacity=\'1\'%3E%3Cpath d=\'M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z\'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")',
-          }}
-        />
+        <div className="absolute inset-0 radial-overlay" />
+        <div className="absolute inset-0 grid-pattern opacity-30" />
+        
+        {/* Floating elements */}
+        <div className="absolute right-20 top-20 h-64 w-64 rounded-full bg-primary/10 blur-3xl" />
+        <div className="absolute -left-20 bottom-20 h-96 w-96 rounded-full bg-primary/5 blur-3xl" />
 
         <div className="relative z-10 flex flex-col justify-between p-12 w-full">
-          <div className="flex items-center gap-2">
-            <Clock className="w-8 h-8 text-foreground" />
-            <span className="font-display text-2xl tracking-tight text-foreground">Tempo</span>
-            <span className="font-mono text-xs text-muted-foreground mt-1">PRO</span>
+          {/* Logo */}
+          <div className="flex items-center gap-3">
+            <div className="relative">
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-primary/70 shadow-lg shadow-primary/30">
+                <Timer className="h-6 w-6 text-primary-foreground" />
+              </div>
+              <div className="absolute inset-0 rounded-xl bg-primary/20 blur-xl" />
+            </div>
+            <div className="flex flex-col">
+              <span className="text-2xl font-semibold tracking-tight text-foreground">
+                TEMPO
+              </span>
+              <span className="text-[10px] font-medium uppercase tracking-widest text-primary">
+                Enterprise
+              </span>
+            </div>
           </div>
 
-          <div className="space-y-8">
-            <div>
-              <h1 className="font-display text-5xl xl:text-6xl text-foreground leading-tight">
+          {/* Center content */}
+          <div className="flex flex-col items-center justify-center flex-1 py-12">
+            <AnimatedClock />
+            
+            <div className="mt-12 text-center max-w-lg">
+              <h1 className="text-4xl xl:text-5xl font-semibold text-foreground leading-tight">
                 Control de Tiempos
-                <br />
-                <span className="text-muted-foreground">Inteligente</span>
+                <span className="block mt-2 tempo-gradient-text">Inteligente</span>
               </h1>
-              <p className="mt-6 text-lg text-muted-foreground max-w-md leading-relaxed">
+              <p className="mt-6 text-lg text-muted-foreground leading-relaxed">
                 Sistema integral de gestion de nomina colombiana con calculo
                 automatico de recargos, horas extras y cumplimiento legal.
               </p>
             </div>
-
-            <div className="grid grid-cols-2 gap-6">
-              <div className="flex items-start gap-3">
-                <div className="p-2 rounded-lg bg-secondary">
-                  <Building2 className="w-5 h-5 text-foreground" />
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-foreground">Multi-empresa</p>
-                  <p className="text-xs text-muted-foreground">Gestiona multiples sedes</p>
-                </div>
-              </div>
-              <div className="flex items-start gap-3">
-                <div className="p-2 rounded-lg bg-secondary">
-                  <Users className="w-5 h-5 text-foreground" />
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-foreground">Sin limite</p>
-                  <p className="text-xs text-muted-foreground">Empleados ilimitados</p>
-                </div>
-              </div>
-              <div className="flex items-start gap-3">
-                <div className="p-2 rounded-lg bg-secondary">
-                  <Shield className="w-5 h-5 text-foreground" />
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-foreground">100% Legal</p>
-                  <p className="text-xs text-muted-foreground">Cumplimiento CST</p>
-                </div>
-              </div>
-              <div className="flex items-start gap-3">
-                <div className="p-2 rounded-lg bg-secondary">
-                  <Clock className="w-5 h-5 text-foreground" />
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-foreground">Tiempo real</p>
-                  <p className="text-xs text-muted-foreground">Calculos automaticos</p>
-                </div>
-              </div>
-            </div>
           </div>
 
-          <div className="flex items-center justify-between text-sm text-muted-foreground">
+          {/* Features grid */}
+          <div className="grid grid-cols-2 gap-4">
+            {features.map((feature) => (
+              <div
+                key={feature.title}
+                className="group flex items-start gap-3 rounded-xl border border-border bg-card/50 p-4 backdrop-blur-sm transition-all duration-300 hover:border-primary/30 hover:bg-card"
+              >
+                <div className="rounded-lg bg-primary/10 p-2 transition-colors group-hover:bg-primary/20">
+                  <feature.icon className="h-5 w-5 text-primary" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-foreground">{feature.title}</p>
+                  <p className="text-xs text-muted-foreground">{feature.description}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Footer */}
+          <div className="flex items-center justify-between text-sm text-muted-foreground mt-8 pt-8 border-t border-border">
             <p>Actualizado a julio 2026</p>
             <p>Ley 2101 / CST Colombia</p>
           </div>
         </div>
-
-        <div className="absolute -right-32 top-1/2 -translate-y-1/2 w-96 h-96 rounded-full bg-gradient-to-br from-foreground/5 to-transparent blur-3xl" />
       </div>
 
-      <div className="w-full lg:w-1/2 flex flex-col justify-center px-8 sm:px-12 lg:px-16 xl:px-24">
+      {/* Right panel - Login form */}
+      <div className="w-full lg:w-1/2 flex flex-col justify-center px-6 sm:px-12 lg:px-16 xl:px-24">
         <div className="max-w-md mx-auto w-full">
-          <div className="lg:hidden flex items-center gap-2 mb-12">
-            <Clock className="w-6 h-6 text-foreground" />
-            <span className="font-display text-xl tracking-tight text-foreground">Tempo</span>
-            <span className="font-mono text-xs text-muted-foreground">PRO</span>
+          {/* Mobile logo */}
+          <div className="lg:hidden flex items-center gap-3 mb-12">
+            <div className="relative">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-primary/70 shadow-lg shadow-primary/20">
+                <Timer className="h-5 w-5 text-primary-foreground" />
+              </div>
+            </div>
+            <div className="flex flex-col">
+              <span className="text-xl font-semibold tracking-tight text-foreground">
+                TEMPO
+              </span>
+              <span className="text-[10px] font-medium uppercase tracking-widest text-primary">
+                Enterprise
+              </span>
+            </div>
           </div>
 
+          {/* Form header */}
           <div className="mb-8">
-            <h2 className="text-3xl font-display text-foreground">Iniciar sesion</h2>
+            <h2 className="text-3xl font-semibold text-foreground">Bienvenido</h2>
             <p className="mt-2 text-muted-foreground">
               Ingresa tus credenciales para acceder al sistema
             </p>
           </div>
 
-          <form onSubmit={handleLogin} className="space-y-5">
+          {/* Login form */}
+          <form onSubmit={handleLogin} className="space-y-6">
             <div className="space-y-2">
               <label htmlFor="email" className="text-sm font-medium text-foreground">
                 Correo electronico
@@ -163,7 +258,7 @@ export function LoginScreen() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
-                className="h-12 bg-card border-border focus:border-foreground/30"
+                className="h-12 rounded-xl bg-card border-border focus:border-primary/50 focus:ring-2 focus:ring-primary/20 transition-all"
               />
             </div>
 
@@ -179,7 +274,7 @@ export function LoginScreen() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
-                  className="h-12 bg-card border-border focus:border-foreground/30 pr-12"
+                  className="h-12 rounded-xl bg-card border-border focus:border-primary/50 focus:ring-2 focus:ring-primary/20 pr-12 transition-all"
                 />
                 <button
                   type="button"
@@ -192,38 +287,49 @@ export function LoginScreen() {
               </div>
             </div>
 
+            {/* Error message */}
             {error && (
-              <div className="flex items-center gap-2 p-3 rounded-lg bg-destructive/10 border border-destructive/20">
-                <AlertCircle className="w-4 h-4 text-destructive shrink-0" />
+              <div className="flex items-center gap-3 p-4 rounded-xl bg-destructive/10 border border-destructive/20">
+                <AlertCircle className="w-5 h-5 text-destructive shrink-0" />
                 <p className="text-sm text-destructive">{error}</p>
               </div>
             )}
 
+            {/* Success message */}
             {success && (
-              <div className="flex items-center gap-2 p-3 rounded-lg bg-green-500/10 border border-green-500/20">
-                <CheckCircle2 className="w-4 h-4 text-green-500 shrink-0" />
-                <p className="text-sm text-green-500">{success}</p>
+              <div className="flex items-center gap-3 p-4 rounded-xl bg-tempo-success/10 border border-tempo-success/20">
+                <CheckCircle2 className="w-5 h-5 text-tempo-success shrink-0" />
+                <p className="text-sm text-tempo-success">{success}</p>
               </div>
             )}
 
+            {/* Submit button */}
             <Button
               type="submit"
               disabled={isLoading}
-              className="w-full h-12 bg-foreground text-background hover:bg-foreground/90 rounded-xl font-medium text-base group"
+              className="w-full h-12 rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 font-medium text-base group transition-all duration-200 shadow-lg shadow-primary/20 hover:shadow-xl hover:shadow-primary/30"
             >
               {isLoading ? (
-                <div className="flex items-center gap-2">
-                  <div className="w-4 h-4 border-2 border-background/30 border-t-background rounded-full animate-spin" />
+                <div className="flex items-center gap-3">
+                  <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary-foreground/30 border-t-primary-foreground" />
                   <span>Verificando...</span>
                 </div>
               ) : (
                 <span className="flex items-center gap-2">
                   Iniciar sesion
-                  <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
+                  <ArrowRight className="w-5 h-5 transition-transform group-hover:translate-x-1" />
                 </span>
               )}
             </Button>
           </form>
+
+          {/* Footer info */}
+          <div className="mt-8 pt-8 border-t border-border">
+            <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
+              <Shield className="h-4 w-4" />
+              <span>Conexion segura SSL/TLS</span>
+            </div>
+          </div>
         </div>
       </div>
     </div>

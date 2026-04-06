@@ -21,10 +21,11 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'Tempo | Software de control de tiempos para Colombia',
+  title: 'TEMPO | Software Empresarial de Control de Tiempos',
   description:
-    'Tempo centraliza marcaciones, recargos, horas extra y cumplimiento laboral colombiano con una experiencia pensada para operaciones, RR. HH. y nomina.',
-  generator: 'Tempo',
+    'TEMPO es el software SaaS premium para gestion de tiempos, horas extras, recargos y cumplimiento laboral colombiano. Optimiza la productividad de tu empresa.',
+  generator: 'TEMPO Enterprise',
+  keywords: ['control de tiempos', 'horas extras', 'nomina colombia', 'gestion laboral', 'software empresarial'],
 }
 
 export default function RootLayout({
