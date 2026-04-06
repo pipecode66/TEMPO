@@ -8,10 +8,29 @@ const backendOrigin = (
   process.env.TEMPO_BACKEND_ORIGIN ?? process.env.TEMPO_BACKEND_PROXY_URL ?? ""
 ).replace(/\/$/, "");
 
-function buildUpstreamUrl(request: NextRequest, path: string[]) {
-  const upstreamUrl = new URL(`${backendOrigin}/${path.join("/")}`);
+function buildUpstreamUrl(origin: string, request: NextRequest, path: string[]) {
+  const upstreamUrl = new URL(`${origin}/${path.join("/")}`);
   upstreamUrl.search = new URL(request.url).search;
   return upstreamUrl;
+}
+
+function getCandidateOrigins() {
+  if (!backendOrigin) {
+    return [];
+  }
+
+  const normalized = new URL(backendOrigin);
+  const basePath = normalized.pathname.replace(/\/$/, "");
+
+  if (basePath === "/api") {
+    return [backendOrigin];
+  }
+
+  if (!basePath || basePath === "/") {
+    return [backendOrigin, `${backendOrigin}/api`];
+  }
+
+  return [backendOrigin];
 }
 
 function buildRequestHeaders(request: NextRequest) {
@@ -30,7 +49,9 @@ async function proxyRequest(
   request: NextRequest,
   context: { params: Promise<{ path: string[] }> },
 ) {
-  if (!backendOrigin) {
+  const candidateOrigins = getCandidateOrigins();
+
+  if (candidateOrigins.length === 0) {
     return NextResponse.json(
       {
         error: {
@@ -44,18 +65,40 @@ async function proxyRequest(
   }
 
   const { path } = await context.params;
-  const upstreamUrl = buildUpstreamUrl(request, path);
   const method = request.method.toUpperCase();
   const requestHeaders = buildRequestHeaders(request);
+  const requestBody =
+    method === "GET" || method === "HEAD" ? undefined : await request.arrayBuffer();
 
-  const upstreamResponse = await fetch(upstreamUrl, {
-    method,
-    headers: requestHeaders,
-    body:
-      method === "GET" || method === "HEAD" ? undefined : await request.arrayBuffer(),
-    cache: "no-store",
-    redirect: "manual",
-  });
+  let upstreamResponse: Response | null = null;
+
+  for (const candidateOrigin of candidateOrigins) {
+    const upstreamUrl = buildUpstreamUrl(candidateOrigin, request, path);
+    const response = await fetch(upstreamUrl, {
+      method,
+      headers: requestHeaders,
+      body: requestBody,
+      cache: "no-store",
+      redirect: "manual",
+    });
+
+    upstreamResponse = response;
+    if (response.status !== 404) {
+      break;
+    }
+  }
+
+  if (!upstreamResponse) {
+    return NextResponse.json(
+      {
+        error: {
+          code: "backend_unreachable",
+          message: "No fue posible contactar el backend configurado para Tempo.",
+        },
+      },
+      { status: 502 },
+    );
+  }
 
   const responseHeaders = new Headers(upstreamResponse.headers);
   const setCookies =

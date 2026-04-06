@@ -39,7 +39,7 @@ Notas:
 - `NEXT_PUBLIC_API_BASE_URL=/api` mantiene auth por cookies en el mismo origen.
 - `TEMPO_BACKEND_ORIGIN` es la URL base real del backend FastAPI. El frontend la consume a traves de [app/api/[...path]/route.ts](/C:/Users/juanitou/Documents/TRABAJO/TEMPO/app/api/[...path]/route.ts), manteniendo `/api/*` en el mismo dominio para cookies y auth.
 - En local, apunta a `http://127.0.0.1:8000`.
-- En produccion, apunta al dominio del proyecto backend desplegado por separado.
+- En produccion, puede apuntar al dominio del proyecto backend desplegado por separado, por ejemplo `https://tempoapibackend.vercel.app`. El proxy reintentara automaticamente con `/api` si ese backend esta montado bajo ese prefijo.
 
 ## Desarrollo local
 
