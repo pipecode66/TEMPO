@@ -11,6 +11,11 @@ export class ApiResponseError extends Error {
   }
 }
 
+function looksLikeHtmlDocument(value: string): boolean {
+  const normalized = value.trim().toLowerCase();
+  return normalized.startsWith("<!doctype html") || normalized.startsWith("<html");
+}
+
 export async function fetchJson<T>(
   input: RequestInfo | URL,
   init?: RequestInit,
@@ -87,6 +92,14 @@ export function getApiErrorMessage(error: unknown): string {
     }
 
     if (typeof error.payload === "string" && error.payload.length > 0) {
+      if (looksLikeHtmlDocument(error.payload)) {
+        if (error.status === 404) {
+          return "La ruta de la API no estuvo disponible. Revisa el despliegue o la configuracion de /api en Vercel.";
+        }
+
+        return "La API devolvio una respuesta HTML inesperada. Revisa el despliegue del backend y la configuracion del proxy.";
+      }
+
       return error.payload;
     }
 

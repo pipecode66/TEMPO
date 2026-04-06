@@ -88,6 +88,7 @@ Archivos clave:
 
 - [vercel.json](/C:/Users/juanitou/Documents/TRABAJO/TEMPO/vercel.json)
 - [api/index.py](/C:/Users/juanitou/Documents/TRABAJO/TEMPO/api/index.py)
+- [api/[...path].py](/C:/Users/juanitou/Documents/TRABAJO/TEMPO/api/[...path].py)
 - [api/requirements.txt](/C:/Users/juanitou/Documents/TRABAJO/TEMPO/api/requirements.txt)
 - [next.config.mjs](/C:/Users/juanitou/Documents/TRABAJO/TEMPO/next.config.mjs)
 
