@@ -35,12 +35,12 @@ def is_minor_day_window(value: time, latest_end: time) -> bool:
 
 
 def resolve_weekly_ordinary_limit(request: CalculoJornadaRequest, rates: LegalRates) -> float:
-    agreed = request.configuracion.horas_semanales_pactadas or rates.weekly_limit_hours
     legal_limit = (
         rates.minor_weekly_limit_hours
         if request.empleado.es_menor_protegido
         else rates.weekly_limit_hours
     )
+    agreed = request.configuracion.horas_semanales_pactadas or legal_limit
 
     if agreed > legal_limit:
         raise ValueError(

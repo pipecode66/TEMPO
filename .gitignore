@@ -26,3 +26,11 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# python
+.venv/
+__pycache__/
+*.py[cod]
+
+# local logs
+tempo-api*.log
