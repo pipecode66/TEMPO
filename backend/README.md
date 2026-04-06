@@ -36,7 +36,7 @@ Despliega esta carpeta como un proyecto independiente:
 
 1. Crea un proyecto nuevo en Vercel apuntando al mismo repositorio.
 2. Configura `Root Directory = backend`.
-3. Usa [index.py](/C:/Users/juanitou/Documents/TRABAJO/TEMPO/backend/index.py) como entrypoint del runtime Python.
+3. El entrypoint del runtime Python queda en [api/index.py](/C:/Users/juanitou/Documents/TRABAJO/TEMPO/backend/api/index.py).
 4. Configura `DATABASE_URL`, `JWT_SECRET_KEY`, `COOKIE_SECURE=true`, `COOKIE_SAMESITE=lax` y `CORS_ORIGINS` con el dominio del frontend.
 5. Ejecuta las migraciones sobre la base productiva antes del primer uso.
 
