@@ -41,7 +41,8 @@ Despliega esta carpeta como un proyecto independiente:
 5. [pyproject.toml](/C:/Users/juanitou/Documents/TRABAJO/TEMPO/backend/pyproject.toml) declara las dependencias del runtime Python.
 6. Tambien se expone [api/index.py](/C:/Users/juanitou/Documents/TRABAJO/TEMPO/backend/api/index.py) para despliegues donde Vercel monte el runtime Python bajo `/api`.
 7. Configura `DATABASE_URL`, `JWT_SECRET_KEY`, `COOKIE_SECURE=true`, `COOKIE_SAMESITE=lax` y `CORS_ORIGINS` con el dominio del frontend.
-8. Ejecuta las migraciones sobre la base productiva antes del primer uso.
+8. El backend ahora auto-crea el esquema inicial y el admin seed al arrancar, incluso en produccion.
+9. Usa Alembic para cambios posteriores o migraciones versionadas sobre una base ya existente.
 
 ## Seed basico
 

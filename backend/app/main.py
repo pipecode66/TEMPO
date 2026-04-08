@@ -22,13 +22,21 @@ settings = get_settings()
 logger = get_logger(__name__)
 
 
+def bootstrap_database() -> None:
+    logger.info(
+        "database_bootstrap_started",
+        extra={"extra_payload": {"environment": settings.environment}},
+    )
+    create_all_tables()
+    with SessionLocal() as db:
+        seed_defaults(db)
+    logger.info("database_bootstrap_completed")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     configure_logging()
-    if settings.is_sqlite or settings.environment == "development":
-        create_all_tables()
-        with SessionLocal() as db:
-            seed_defaults(db)
+    bootstrap_database()
     yield
 
 
