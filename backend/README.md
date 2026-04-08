@@ -37,8 +37,8 @@ Despliega esta carpeta como un proyecto independiente:
 1. Crea un proyecto nuevo en Vercel apuntando al mismo repositorio.
 2. Configura `Root Directory = backend`.
 3. El entrypoint FastAPI principal queda en [index.py](/C:/Users/juanitou/Documents/TRABAJO/TEMPO/backend/index.py).
-4. Tambien se incluyen [app.py](/C:/Users/juanitou/Documents/TRABAJO/TEMPO/backend/app.py) y [server.py](/C:/Users/juanitou/Documents/TRABAJO/TEMPO/backend/server.py) como entrypoints compatibles con la autodeteccion de Vercel.
-5. [pyproject.toml](/C:/Users/juanitou/Documents/TRABAJO/TEMPO/backend/pyproject.toml) declara explicitamente `app = "index:app"` para evitar ambiguedades en el despliegue.
+4. Tambien se incluye [server.py](/C:/Users/juanitou/Documents/TRABAJO/TEMPO/backend/server.py) como entrypoint alterno compatible con la autodeteccion de Vercel.
+5. [pyproject.toml](/C:/Users/juanitou/Documents/TRABAJO/TEMPO/backend/pyproject.toml) declara las dependencias del runtime Python.
 6. Tambien se expone [api/index.py](/C:/Users/juanitou/Documents/TRABAJO/TEMPO/backend/api/index.py) para despliegues donde Vercel monte el runtime Python bajo `/api`.
 7. Configura `DATABASE_URL`, `JWT_SECRET_KEY`, `COOKIE_SECURE=true`, `COOKIE_SAMESITE=lax` y `CORS_ORIGINS` con el dominio del frontend.
 8. Ejecuta las migraciones sobre la base productiva antes del primer uso.
