@@ -49,76 +49,110 @@ async function proxyRequest(
   request: NextRequest,
   context: { params: Promise<{ path: string[] }> },
 ) {
-  const candidateOrigins = getCandidateOrigins();
+  try {
+    const candidateOrigins = getCandidateOrigins();
 
-  if (candidateOrigins.length === 0) {
-    return NextResponse.json(
-      {
-        error: {
-          code: "backend_origin_not_configured",
-          message:
-            "Tempo no tiene configurado el backend productivo. Define TEMPO_BACKEND_ORIGIN en Vercel.",
+    if (candidateOrigins.length === 0) {
+      console.error("[API Proxy] TEMPO_BACKEND_ORIGIN not configured. Current value:", backendOrigin);
+      return NextResponse.json(
+        {
+          error: {
+            code: "backend_origin_not_configured",
+            message:
+              "Tempo no tiene configurado el backend productivo. Define TEMPO_BACKEND_ORIGIN en Vercel.",
+          },
         },
-      },
-      { status: 503 },
-    );
-  }
-
-  const { path } = await context.params;
-  const method = request.method.toUpperCase();
-  const requestHeaders = buildRequestHeaders(request);
-  const requestBody =
-    method === "GET" || method === "HEAD" ? undefined : await request.arrayBuffer();
-
-  let upstreamResponse: Response | null = null;
-
-  for (const candidateOrigin of candidateOrigins) {
-    const upstreamUrl = buildUpstreamUrl(candidateOrigin, request, path);
-    const response = await fetch(upstreamUrl, {
-      method,
-      headers: requestHeaders,
-      body: requestBody,
-      cache: "no-store",
-      redirect: "manual",
-    });
-
-    upstreamResponse = response;
-    if (response.status !== 404) {
-      break;
+        { status: 503 },
+      );
     }
-  }
 
-  if (!upstreamResponse) {
+    const { path } = await context.params;
+    const method = request.method.toUpperCase();
+    const requestHeaders = buildRequestHeaders(request);
+    
+    let requestBody: ArrayBuffer | undefined;
+    try {
+      requestBody =
+        method === "GET" || method === "HEAD" ? undefined : await request.arrayBuffer();
+    } catch (bodyError) {
+      console.error("[API Proxy] Error reading request body:", bodyError);
+      requestBody = undefined;
+    }
+
+    let upstreamResponse: Response | null = null;
+    let lastError: Error | null = null;
+
+    for (const candidateOrigin of candidateOrigins) {
+      const upstreamUrl = buildUpstreamUrl(candidateOrigin, request, path);
+      console.log("[API Proxy] Attempting fetch to:", upstreamUrl.toString());
+      
+      try {
+        const response = await fetch(upstreamUrl, {
+          method,
+          headers: requestHeaders,
+          body: requestBody,
+          cache: "no-store",
+          redirect: "manual",
+        });
+
+        upstreamResponse = response;
+        console.log("[API Proxy] Response status:", response.status);
+        
+        if (response.status !== 404) {
+          break;
+        }
+      } catch (fetchError) {
+        lastError = fetchError instanceof Error ? fetchError : new Error(String(fetchError));
+        console.error("[API Proxy] Fetch error for", upstreamUrl.toString(), ":", lastError.message);
+      }
+    }
+
+    if (!upstreamResponse) {
+      console.error("[API Proxy] All candidate origins failed. Last error:", lastError?.message);
+      return NextResponse.json(
+        {
+          error: {
+            code: "backend_unreachable",
+            message: "No fue posible contactar el backend configurado para Tempo.",
+            details: lastError?.message,
+          },
+        },
+        { status: 502 },
+      );
+    }
+
+    const responseHeaders = new Headers(upstreamResponse.headers);
+    const setCookies =
+      typeof upstreamResponse.headers.getSetCookie === "function"
+        ? upstreamResponse.headers.getSetCookie()
+        : [];
+
+    responseHeaders.delete("content-length");
+    responseHeaders.delete("set-cookie");
+    responseHeaders.set("cache-control", "no-store, max-age=0");
+
+    for (const cookie of setCookies) {
+      responseHeaders.append("set-cookie", cookie);
+    }
+
+    return new Response(upstreamResponse.body, {
+      status: upstreamResponse.status,
+      statusText: upstreamResponse.statusText,
+      headers: responseHeaders,
+    });
+  } catch (error) {
+    console.error("[API Proxy] Unhandled error:", error);
     return NextResponse.json(
       {
         error: {
-          code: "backend_unreachable",
-          message: "No fue posible contactar el backend configurado para Tempo.",
+          code: "proxy_error",
+          message: "Error interno en el proxy de Tempo.",
+          details: error instanceof Error ? error.message : String(error),
         },
       },
-      { status: 502 },
+      { status: 500 },
     );
   }
-
-  const responseHeaders = new Headers(upstreamResponse.headers);
-  const setCookies =
-    typeof upstreamResponse.headers.getSetCookie === "function"
-      ? upstreamResponse.headers.getSetCookie()
-      : [];
-
-  responseHeaders.delete("content-length");
-  responseHeaders.delete("set-cookie");
-  responseHeaders.set("cache-control", "no-store, max-age=0");
-
-  for (const cookie of setCookies) {
-    responseHeaders.append("set-cookie", cookie);
-  }
-
-  return new Response(upstreamResponse.body, {
-    status: upstreamResponse.status,
-    statusText: upstreamResponse.statusText,
-    headers: responseHeaders,
-  });
 }
 
 export const GET = proxyRequest;
