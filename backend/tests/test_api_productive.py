@@ -170,6 +170,34 @@ def test_auth_flow_and_role_protection(
     assert logout_response.status_code == 200
 
 
+def test_register_creates_company_admin_and_session(client: TestClient) -> None:
+    register_response = client.post(
+        "/v1/auth/register",
+        json={
+            "company_name": "Campo Vivo SAS",
+            "company_nit": "901555777-9",
+            "full_name": "Andrea Admin",
+            "email": "andrea@campovivo.com",
+            "password": "Admin123!",
+        },
+    )
+    assert register_response.status_code == 201, register_response.text
+    payload = register_response.json()
+    assert payload["user"]["role"] == "admin"
+    assert payload["user"]["email"] == "andrea@campovivo.com"
+
+    me_response = client.get("/v1/auth/me")
+    assert me_response.status_code == 200, me_response.text
+    assert me_response.json()["email"] == "andrea@campovivo.com"
+
+    company_response = client.get("/v1/company")
+    assert company_response.status_code == 200, company_response.text
+    company_payload = company_response.json()
+    assert company_payload["name"] == "Campo Vivo SAS"
+    assert company_payload["nit"] == "901555777-9"
+    assert company_payload["settings"]["jurisdiction_code"] == "co-national-2026"
+
+
 def test_company_employee_time_entry_report_and_audit_flow(
     client: TestClient,
     seeded_identity: dict[str, str],

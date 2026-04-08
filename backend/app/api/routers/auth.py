@@ -10,18 +10,21 @@ from app.core.security import (
     create_access_token,
     create_refresh_token,
     decode_token,
+    hash_password,
     verify_password,
 )
-from app.db.models import User
+from app.db.models import User, UserRole
 from app.db.session import get_db
 from app.dependencies.auth import get_current_user, get_current_user_optional
+from app.repositories.company_repository import CompanyRepository
 from app.repositories.user_repository import UserRepository
-from app.schemas.auth import AuthenticatedUser, LoginRequest, TokenResponse
+from app.schemas.auth import AuthenticatedUser, LoginRequest, RegisterRequest, TokenResponse
 from app.services.audit_service import record_audit_event
 
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 user_repository = UserRepository()
+company_repository = CompanyRepository()
 settings = get_settings()
 
 
@@ -63,6 +66,25 @@ def clear_auth_cookies(response: Response) -> None:
     response.delete_cookie(settings.refresh_cookie_name, path="/")
 
 
+def build_default_company_settings() -> dict[str, object]:
+    return {
+        "jurisdiction_code": "co-national-2026",
+        "country_code": "CO",
+        "subdivision_code": None,
+        "jornada_semanal_maxima": 42,
+        "dias_laborales_semana": 5,
+        "limite_extras_diarias": 2,
+        "limite_extras_semanales": 12,
+        "horario_nocturno_inicio": "19:00",
+        "horario_nocturno_fin": "06:00",
+        "alertas_automaticas": True,
+        "cierre_semanal_automatico": False,
+        "requires_qr_for_field": False,
+        "recargo_descanso_obligatorio": 0.9,
+        "fecha_normativa": "2026-07-15",
+    }
+
+
 @router.post("/login", response_model=TokenResponse)
 def login(payload: LoginRequest, response: Response, db: Session = Depends(get_db)) -> TokenResponse:
     user = user_repository.get_by_email(db, payload.email)
@@ -87,6 +109,59 @@ def login(payload: LoginRequest, response: Response, db: Session = Depends(get_d
         action="auth.login",
         entity_type="session",
         metadata={"email": user.email},
+    )
+    db.commit()
+    return TokenResponse(
+        access_token_expires_in=settings.access_token_expire_minutes * 60,
+        refresh_token_expires_in=settings.refresh_token_expire_days * 24 * 60 * 60,
+        user=serialize_user(user),
+    )
+
+
+@router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
+def register(
+    payload: RegisterRequest,
+    response: Response,
+    db: Session = Depends(get_db),
+) -> TokenResponse:
+    if company_repository.get_by_nit(db, payload.company_nit):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Ya existe una empresa registrada con ese NIT.",
+        )
+    if user_repository.get_by_email(db, payload.email):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Ya existe una cuenta registrada con ese correo.",
+        )
+
+    company = company_repository.create(
+        db,
+        name=payload.company_name,
+        nit=payload.company_nit,
+        settings_json=build_default_company_settings(),
+    )
+    user = user_repository.create(
+        db,
+        company_id=company.id,
+        email=payload.email.lower(),
+        full_name=payload.full_name,
+        role=UserRole.ADMIN,
+        password_hash=hash_password(payload.password),
+        is_active=True,
+    )
+    user.last_login_at = datetime.now(timezone.utc)
+
+    access_token = create_access_token(user.id, user.company_id, user.role.value)
+    refresh_token = create_refresh_token(user.id, user.company_id, user.role.value)
+    set_auth_cookies(response, access_token=access_token, refresh_token=refresh_token)
+    record_audit_event(
+        db,
+        actor=user,
+        action="auth.register",
+        entity_type="company",
+        entity_id=company.id,
+        after={"company_id": company.id, "company_name": company.name, "email": user.email},
     )
     db.commit()
     return TokenResponse(

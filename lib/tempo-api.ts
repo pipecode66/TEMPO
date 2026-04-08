@@ -21,6 +21,14 @@ export type LoginRequest = {
   password: string;
 };
 
+export type RegisterRequest = {
+  company_name: string;
+  company_nit: string;
+  full_name: string;
+  email: string;
+  password: string;
+};
+
 export type LoginResponse = {
   access_token_expires_in: number;
   refresh_token_expires_in: number;
@@ -429,6 +437,16 @@ async function fetchApiText(path: string): Promise<string> {
 
 export async function login(payload: LoginRequest): Promise<LoginResponse> {
   return fetchJson<LoginResponse>(`${apiBaseUrl}/v1/auth/login`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function register(payload: RegisterRequest): Promise<LoginResponse> {
+  return fetchJson<LoginResponse>(`${apiBaseUrl}/v1/auth/register`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",

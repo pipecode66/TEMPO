@@ -12,6 +12,7 @@ import {
   Shield,
   Users,
 } from "lucide-react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
@@ -238,7 +239,14 @@ export function LoginScreen() {
             <p className="mt-6 text-center text-xs text-muted-foreground">
               Sesion activa para {user.email}.
             </p>
-          ) : null}
+          ) : (
+            <p className="mt-6 text-center text-sm text-muted-foreground">
+              Primera vez en Tempo?{" "}
+              <Link href="/registro" className="text-foreground underline underline-offset-4">
+                Crear empresa y cuenta
+              </Link>
+            </p>
+          )}
         </div>
       </div>
     </div>

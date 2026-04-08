@@ -15,11 +15,13 @@ import { ApiResponseError } from "@/lib/fetch-json";
 import {
   type AuthenticatedUser,
   type LoginRequest,
+  type RegisterRequest,
   type UserRole,
   getCurrentUser,
   login as loginRequest,
   logout as logoutRequest,
   refreshSession,
+  register as registerRequest,
 } from "@/lib/tempo-api";
 
 type PermissionSet = {
@@ -37,6 +39,7 @@ type AuthContextValue = {
   isAuthenticated: boolean;
   permissions: PermissionSet;
   login: (payload: LoginRequest) => Promise<AuthenticatedUser>;
+  register: (payload: RegisterRequest) => Promise<AuthenticatedUser>;
   logout: () => Promise<void>;
   refreshAuth: () => Promise<AuthenticatedUser | null>;
   hasAnyRole: (...roles: UserRole[]) => boolean;
@@ -154,6 +157,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       permissions: resolvePermissions(user?.role),
       login: async (payload) => {
         const response = await loginRequest(payload);
+        startTransition(() => {
+          setUser(response.user);
+        });
+        return response.user;
+      },
+      register: async (payload) => {
+        const response = await registerRequest(payload);
         startTransition(() => {
           setUser(response.user);
         });

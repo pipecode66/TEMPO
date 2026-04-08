@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import {
   CheckCircle2,
   Clock3,
+  LogOut,
   MapPin,
   QrCode,
   ShieldCheck,
@@ -70,7 +71,7 @@ function getCurrentPosition(): Promise<GeoCaptureRequest> {
 export function EmployeePortal() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { user, isLoading: isAuthLoading } = useAuth();
+  const { logout, user, isLoading: isAuthLoading } = useAuth();
   const [summary, setSummary] = useState<EmployeePortalSummaryResponse>(emptySummary);
   const [qrToken, setQrToken] = useState(searchParams.get("qr") ?? "");
   const [notes, setNotes] = useState("");
@@ -160,6 +161,11 @@ export function EmployeePortal() {
     }
   }
 
+  async function handleLogout() {
+    await logout();
+    router.replace("/");
+  }
+
   return (
     <div className="min-h-screen bg-background px-5 py-8 lg:px-10">
       <div className="mx-auto max-w-6xl space-y-6">
@@ -181,6 +187,10 @@ export function EmployeePortal() {
             <Badge variant={summary.current_shift ? "destructive" : "outline"}>
               {summary.current_shift ? "Turno activo" : "Sin turno abierto"}
             </Badge>
+            <Button variant="outline" onClick={() => void handleLogout()}>
+              <LogOut className="h-4 w-4" />
+              Cerrar sesion
+            </Button>
           </div>
         </div>
 
