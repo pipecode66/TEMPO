@@ -38,9 +38,11 @@ function buildRequestHeaders(request: NextRequest) {
   const requestUrl = new URL(request.url);
 
   headers.delete("host");
+  headers.delete("accept-encoding");
   headers.delete("content-length");
   headers.set("x-forwarded-host", requestUrl.host);
   headers.set("x-forwarded-proto", requestUrl.protocol.replace(":", ""));
+  headers.set("accept-encoding", "identity");
 
   return headers;
 }
@@ -107,7 +109,9 @@ async function proxyRequest(
       : [];
 
   responseHeaders.delete("content-length");
+  responseHeaders.delete("content-encoding");
   responseHeaders.delete("set-cookie");
+  responseHeaders.delete("transfer-encoding");
   responseHeaders.set("cache-control", "no-store, max-age=0");
 
   for (const cookie of setCookies) {
