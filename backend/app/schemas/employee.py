@@ -18,6 +18,7 @@ class EmployeeBase(BaseModel):
     weekly_hours: float = Field(default=42, gt=0, le=48)
     work_days_per_week: int = Field(default=5, ge=5, le=6)
     status: str = Field(default="activo")
+    jurisdiction_code: str = Field(default="co-national-2026")
 
 
 class EmployeeCreateRequest(EmployeeBase):
@@ -35,6 +36,11 @@ class EmployeeUpdateRequest(BaseModel):
     weekly_hours: float | None = Field(default=None, gt=0, le=48)
     work_days_per_week: int | None = Field(default=None, ge=5, le=6)
     status: str | None = None
+    jurisdiction_code: str | None = None
+
+
+class EmployeePortalAccessRequest(BaseModel):
+    password: str = Field(..., min_length=6, max_length=128)
 
 
 class EmployeeResponse(TempoSchema):
@@ -50,5 +56,7 @@ class EmployeeResponse(TempoSchema):
     weekly_hours: float
     work_days_per_week: int
     status: str
+    jurisdiction_code: str
+    portal_access_enabled: bool = False
     created_at: datetime
     updated_at: datetime

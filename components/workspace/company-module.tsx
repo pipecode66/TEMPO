@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState, type FormEvent } from "react";
-import { Building2, CheckCircle2, MapPin, UserCog } from "lucide-react";
+import QRCode from "qrcode";
+import { Building2, CheckCircle2, MapPin, QrCode, ScanLine, UserCog } from "lucide-react";
 
 import { useAuth } from "@/components/auth/auth-provider";
 import { Button } from "@/components/ui/button";
@@ -15,6 +16,14 @@ import {
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { Textarea } from "@/components/ui/textarea";
+import { getApiErrorMessage } from "@/lib/fetch-json";
+import {
+  createWorksite,
+  createWorksiteQrToken,
+  listWorksites,
+  type WorksiteQrTokenResponse,
+  type WorksiteResponse,
+} from "@/lib/tempo-api";
 import { useTempoWorkspace } from "@/components/workspace/tempo-provider";
 
 function getCompanyProgress(profile: {
@@ -43,12 +52,53 @@ export function CompanyModule() {
     useTempoWorkspace();
   const { permissions } = useAuth();
   const [formState, setFormState] = useState(companyProfile);
+  const [worksites, setWorksites] = useState<WorksiteResponse[]>([]);
+  const [worksiteForm, setWorksiteForm] = useState({
+    name: "",
+    address: "",
+    latitude: "",
+    longitude: "",
+    radiusMeters: "150",
+  });
+  const [latestQr, setLatestQr] = useState<WorksiteQrTokenResponse | null>(null);
+  const [latestQrImage, setLatestQrImage] = useState("");
   const [message, setMessage] = useState("");
+  const [fieldMessage, setFieldMessage] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSavingWorksite, setIsSavingWorksite] = useState(false);
 
   useEffect(() => {
     setFormState(companyProfile);
   }, [companyProfile]);
+
+  useEffect(() => {
+    async function loadWorksites() {
+      try {
+        const items = await listWorksites();
+        setWorksites(items);
+      } catch (error) {
+        setFieldMessage(getApiErrorMessage(error));
+      }
+    }
+
+    void loadWorksites();
+  }, []);
+
+  useEffect(() => {
+    async function buildQrImage() {
+      if (!latestQr) {
+        setLatestQrImage("");
+        return;
+      }
+      const image = await QRCode.toDataURL(latestQr.qr_url, {
+        width: 220,
+        margin: 1,
+      });
+      setLatestQrImage(image);
+    }
+
+    void buildQrImage();
+  }, [latestQr]);
 
   function updateField(field: keyof typeof formState, value: string) {
     setFormState((current) => ({
@@ -76,6 +126,50 @@ export function CompanyModule() {
       );
     } finally {
       setIsSubmitting(false);
+    }
+  }
+
+  async function handleCreateWorksite(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!permissions.canManageCompany) {
+      setFieldMessage("Tu rol no puede administrar sitios de trabajo.");
+      return;
+    }
+
+    try {
+      setIsSavingWorksite(true);
+      setFieldMessage("");
+      const created = await createWorksite({
+        name: worksiteForm.name,
+        address: worksiteForm.address || null,
+        latitude: Number(worksiteForm.latitude),
+        longitude: Number(worksiteForm.longitude),
+        radius_meters: Number(worksiteForm.radiusMeters),
+      });
+      setWorksites((current) => [created, ...current]);
+      setWorksiteForm({
+        name: "",
+        address: "",
+        latitude: "",
+        longitude: "",
+        radiusMeters: "150",
+      });
+      setFieldMessage("Sitio de trabajo creado correctamente.");
+    } catch (error) {
+      setFieldMessage(getApiErrorMessage(error));
+    } finally {
+      setIsSavingWorksite(false);
+    }
+  }
+
+  async function handleGenerateQr(worksiteId: string) {
+    try {
+      setFieldMessage("");
+      const qr = await createWorksiteQrToken(worksiteId);
+      setLatestQr(qr);
+      setFieldMessage("QR generado. Compártelo o imprímelo para marcaciones en campo.");
+    } catch (error) {
+      setFieldMessage(getApiErrorMessage(error));
     }
   }
 
@@ -223,6 +317,123 @@ export function CompanyModule() {
               <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
                 Sincronizando empresa...
               </p>
+            ) : null}
+          </CardContent>
+        </Card>
+
+        <Card className="bg-card/80">
+          <CardHeader>
+            <CardTitle>Operación en campo</CardTitle>
+            <CardDescription>
+              Crea sitios de trabajo y genera QR para marcaciones con geolocalización.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <form onSubmit={handleCreateWorksite} className="space-y-3">
+              <Input
+                value={worksiteForm.name}
+                onChange={(event) =>
+                  setWorksiteForm((current) => ({ ...current, name: event.target.value }))
+                }
+                placeholder="Nombre del sitio"
+                disabled={!permissions.canManageCompany}
+              />
+              <Input
+                value={worksiteForm.address}
+                onChange={(event) =>
+                  setWorksiteForm((current) => ({ ...current, address: event.target.value }))
+                }
+                placeholder="Dirección o referencia"
+                disabled={!permissions.canManageCompany}
+              />
+              <div className="grid gap-3 sm:grid-cols-3">
+                <Input
+                  value={worksiteForm.latitude}
+                  onChange={(event) =>
+                    setWorksiteForm((current) => ({ ...current, latitude: event.target.value }))
+                  }
+                  placeholder="Latitud"
+                  disabled={!permissions.canManageCompany}
+                />
+                <Input
+                  value={worksiteForm.longitude}
+                  onChange={(event) =>
+                    setWorksiteForm((current) => ({ ...current, longitude: event.target.value }))
+                  }
+                  placeholder="Longitud"
+                  disabled={!permissions.canManageCompany}
+                />
+                <Input
+                  value={worksiteForm.radiusMeters}
+                  onChange={(event) =>
+                    setWorksiteForm((current) => ({
+                      ...current,
+                      radiusMeters: event.target.value,
+                    }))
+                  }
+                  placeholder="Radio en metros"
+                  disabled={!permissions.canManageCompany}
+                />
+              </div>
+              <Button type="submit" disabled={!permissions.canManageCompany || isSavingWorksite}>
+                <MapPin className="h-4 w-4" />
+                {isSavingWorksite ? "Guardando..." : "Crear sitio"}
+              </Button>
+            </form>
+
+            {fieldMessage ? (
+              <div className="rounded-2xl bg-background/60 px-4 py-3 text-sm text-muted-foreground">
+                {fieldMessage}
+              </div>
+            ) : null}
+
+            <div className="space-y-3">
+              {worksites.length === 0 ? (
+                <div className="rounded-2xl bg-background/60 px-4 py-4 text-sm text-muted-foreground">
+                  Todavía no hay sitios creados para operación en campo.
+                </div>
+              ) : (
+                worksites.map((worksite) => (
+                  <div
+                    key={worksite.id}
+                    className="rounded-2xl border border-border bg-background/50 p-4"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-medium text-foreground">{worksite.name}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {worksite.address || "Sin dirección"} | radio {worksite.radius_meters}m
+                        </p>
+                      </div>
+                      <Button
+                        variant="outline"
+                        onClick={() => void handleGenerateQr(worksite.id)}
+                        disabled={!permissions.canManageCompany}
+                      >
+                        <QrCode className="h-4 w-4" />
+                        Generar QR
+                      </Button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            {latestQr ? (
+              <div className="rounded-3xl border border-border bg-background/60 p-4">
+                <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+                  <ScanLine className="h-4 w-4" />
+                  Último QR generado
+                </div>
+                {latestQrImage ? (
+                  <img
+                    src={latestQrImage}
+                    alt="Código QR del sitio de trabajo"
+                    className="mt-4 rounded-2xl bg-white p-3"
+                  />
+                ) : null}
+                <p className="mt-3 break-all text-xs text-muted-foreground">{latestQr.qr_url}</p>
+              </div>
             ) : null}
           </CardContent>
         </Card>

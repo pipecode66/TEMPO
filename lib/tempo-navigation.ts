@@ -2,6 +2,7 @@ import {
   BarChart3,
   Building2,
   CalendarDays,
+  ClipboardCheck,
   Clock3,
   FileText,
   Settings,
@@ -34,6 +35,12 @@ export const workspaceNavigation: WorkspaceNavigationItem[] = [
     label: "Control de tiempos",
     description: "Liquidacion diaria, recargos y validacion legal en linea.",
     icon: Clock3,
+  },
+  {
+    href: "/aprobaciones",
+    label: "Aprobaciones",
+    description: "Revision de jornadas pendientes, comentarios y aprobacion operativa.",
+    icon: ClipboardCheck,
   },
   {
     href: "/calendario",

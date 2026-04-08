@@ -30,6 +30,10 @@ def build_calculation_request(
     company_settings: dict[str, Any],
     accumulated_hours: float,
 ) -> CalculoJornadaRequest:
+    jurisdiction_code = company_settings.get("jurisdiction_code", "co-national-2026")
+    if getattr(employee, "policy_assignment", None):
+        jurisdiction_code = employee.policy_assignment.jurisdiction_code
+
     return CalculoJornadaRequest(
         empleado=Empleado(
             edad=getattr(payload, "override_employee_age", None) or employee.age,
@@ -42,6 +46,7 @@ def build_calculation_request(
         es_dominical=payload.is_sunday,
         acumulado_semanal_horas=accumulated_hours,
         configuracion=ConfiguracionJornada(
+            jurisdiction_code=jurisdiction_code,
             dias_laborales_semana=company_settings.get(
                 "dias_laborales_semana", employee.work_days_per_week
             ),
@@ -210,6 +215,10 @@ def update_time_entry_with_calculation(
 def serialize_time_entry(entry: TimeEntry) -> TimeEntryResponse:
     calculation = entry.calculation_result
     breakdown = calculation.breakdown_json or {}
+    extra_cost = sum(
+        max(float(item.get("valor_total", 0)) - float(item.get("valor_base", 0)), 0)
+        for item in breakdown.values()
+    )
 
     return TimeEntryResponse(
         id=entry.id,
@@ -228,6 +237,7 @@ def serialize_time_entry(entry: TimeEntry) -> TimeEntryResponse:
         calculation_result={
             "valor_total_dia": float(calculation.total_day_value),
             "valor_hora_ordinaria": float(calculation.ordinary_hour_value),
+            "costo_extra_proyectado": round(extra_cost, 2),
             "horas_totales_dia": float(calculation.total_day_hours),
             "desglose_horas": breakdown,
             "alerta_limite_legal": calculation.legal_alert,

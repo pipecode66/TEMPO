@@ -28,6 +28,9 @@ export type LoginResponse = {
 };
 
 export type CompanySettingsResponse = {
+  jurisdiction_code: string;
+  country_code: string;
+  subdivision_code: string | null;
   jornada_semanal_maxima: number;
   dias_laborales_semana: 5 | 6;
   limite_extras_diarias: number;
@@ -36,6 +39,7 @@ export type CompanySettingsResponse = {
   horario_nocturno_fin: string;
   alertas_automaticas: boolean;
   cierre_semanal_automatico: boolean;
+  requires_qr_for_field: boolean;
   recargo_descanso_obligatorio: number;
   fecha_normativa: string;
 };
@@ -76,6 +80,8 @@ export type EmployeeResponse = {
   weekly_hours: number;
   work_days_per_week: 5 | 6;
   status: EmployeeStatus;
+  jurisdiction_code: string;
+  portal_access_enabled: boolean;
   created_at: string;
   updated_at: string;
 };
@@ -91,9 +97,14 @@ export type EmployeeCreateRequest = {
   weekly_hours: number;
   work_days_per_week: 5 | 6;
   status: EmployeeStatus;
+  jurisdiction_code?: string;
 };
 
 export type EmployeeUpdateRequest = Partial<EmployeeCreateRequest>;
+
+export type EmployeePortalAccessRequest = {
+  password: string;
+};
 
 export type JornadaBreakdownItem = {
   etiqueta: string;
@@ -119,6 +130,7 @@ export type JornadaRequest = {
     horas_semanales_pactadas?: number | null;
     horas_diarias_pactadas?: number | null;
     divisor_hora_mensual?: number | null;
+    jurisdiction_code?: string;
     fecha_referencia_normativa: string;
     recargo_descanso_obligatorio?: number | null;
   };
@@ -127,6 +139,7 @@ export type JornadaRequest = {
 export type JornadaResponse = {
   valor_total_dia: number;
   valor_hora_ordinaria: number;
+  costo_extra_proyectado: number;
   horas_totales_dia: number;
   desglose_horas: Record<string, JornadaBreakdownItem>;
   alerta_limite_legal: boolean;
@@ -227,6 +240,150 @@ export type AuditEventResponse = {
   after_json: Record<string, unknown> | null;
   metadata_json: Record<string, unknown> | null;
   created_at: string;
+};
+
+export type JurisdictionOption = {
+  code: string;
+  name: string;
+  country_code: string;
+  subdivision_code: string | null;
+  daily_overtime_limit_hours: number;
+  weekly_overtime_limit_hours: number;
+};
+
+export type GeoCaptureRequest = {
+  latitude: number;
+  longitude: number;
+  accuracy_meters?: number | null;
+};
+
+export type WorksiteResponse = {
+  id: string;
+  company_id: string;
+  name: string;
+  address: string | null;
+  latitude: number;
+  longitude: number;
+  radius_meters: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+export type WorksiteCreateRequest = {
+  name: string;
+  address?: string | null;
+  latitude: number;
+  longitude: number;
+  radius_meters: number;
+};
+
+export type WorksiteQrTokenCreateRequest = {
+  expires_in_minutes?: number;
+};
+
+export type WorksiteQrTokenResponse = {
+  id: string;
+  company_id: string;
+  worksite_id: string;
+  token: string;
+  qr_url: string;
+  expires_at: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+export type AttendanceRequestResponse = {
+  id: string;
+  company_id: string;
+  employee_id: string;
+  employee_name: string;
+  employee_email: string | null;
+  worksite_id: string | null;
+  worksite_name: string | null;
+  work_date: string;
+  check_in_at: string;
+  check_out_at: string | null;
+  status: "open" | "pending" | "approved" | "rejected";
+  verification_method: "direct" | "qr";
+  notes: string | null;
+  justification: string | null;
+  requires_justification: boolean;
+  approval_comment: string | null;
+  approved_by_user_id: string | null;
+  approved_at: string | null;
+  projected_extra_cost: number;
+  preview: JornadaResponse | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type StartShiftRequest = {
+  qr_token?: string | null;
+  geo?: GeoCaptureRequest | null;
+  notes?: string | null;
+};
+
+export type EndShiftRequest = {
+  geo?: GeoCaptureRequest | null;
+  justification?: string | null;
+  notes?: string | null;
+  is_holiday?: boolean;
+};
+
+export type EmployeePortalSummaryResponse = {
+  employee_name: string;
+  employee_email: string | null;
+  worksite_options: Array<{ id: string; name: string }>;
+  current_shift: AttendanceRequestResponse | null;
+  pending_requests: AttendanceRequestResponse[];
+  approved_entries: TimeEntryResponse[];
+  month_extra_cost: number;
+  month_hours: number;
+};
+
+export type AttendanceApprovalDecisionRequest = {
+  comment: string;
+};
+
+export type CostProjectionResponse = {
+  month_label: string;
+  actual_extra_cost: number;
+  pending_extra_cost: number;
+  projected_month_end_extra_cost: number;
+  approved_hours: number;
+  pending_hours: number;
+};
+
+export type PayrollConnectorUpsertRequest = {
+  name: string;
+  provider: string;
+  endpoint_url: string;
+  auth_token?: string | null;
+  payload_format?: "json" | "csv";
+  is_active?: boolean;
+};
+
+export type PayrollConnectorResponse = {
+  id: string;
+  company_id: string;
+  name: string;
+  provider: string;
+  endpoint_url: string;
+  payload_format: string;
+  is_active: boolean;
+  last_delivery_at: string | null;
+  last_delivery_status: string | null;
+  last_delivery_error: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type ConnectorDispatchResponse = {
+  connector_id: string;
+  status: string;
+  detail: string;
 };
 
 export type ReportFilters = {
@@ -349,6 +506,19 @@ export async function updateEmployee(
   });
 }
 
+export async function enableEmployeePortalAccess(
+  employeeId: string,
+  payload: EmployeePortalAccessRequest,
+): Promise<EmployeeResponse> {
+  return fetchJson<EmployeeResponse>(`${apiBaseUrl}/v1/employees/${employeeId}/portal-access`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
 export async function deleteEmployee(employeeId: string): Promise<{ message: string }> {
   return fetchJson<{ message: string }>(`${apiBaseUrl}/v1/employees/${employeeId}`, {
     method: "DELETE",
@@ -448,4 +618,132 @@ export async function downloadReportJson(filters?: ReportFilters): Promise<strin
 export async function listAuditEvents(limit = 100): Promise<AuditEventResponse[]> {
   const query = buildQueryString({ limit });
   return fetchJson<AuditEventResponse[]>(`${apiBaseUrl}/v1/audit-events${query}`);
+}
+
+export async function listJurisdictions(): Promise<JurisdictionOption[]> {
+  return fetchJson<JurisdictionOption[]>(`${apiBaseUrl}/v1/catalogs/jurisdictions`);
+}
+
+export async function listWorksites(): Promise<WorksiteResponse[]> {
+  return fetchJson<WorksiteResponse[]>(`${apiBaseUrl}/v1/worksites`);
+}
+
+export async function createWorksite(
+  payload: WorksiteCreateRequest,
+): Promise<WorksiteResponse> {
+  return fetchJson<WorksiteResponse>(`${apiBaseUrl}/v1/worksites`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function createWorksiteQrToken(
+  worksiteId: string,
+  payload: WorksiteQrTokenCreateRequest = {},
+): Promise<WorksiteQrTokenResponse> {
+  return fetchJson<WorksiteQrTokenResponse>(`${apiBaseUrl}/v1/worksites/${worksiteId}/qr-token`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function getEmployeePortalSummary(): Promise<EmployeePortalSummaryResponse> {
+  return fetchJson<EmployeePortalSummaryResponse>(`${apiBaseUrl}/v1/self-service/summary`);
+}
+
+export async function startEmployeeShift(
+  payload: StartShiftRequest,
+): Promise<AttendanceRequestResponse> {
+  return fetchJson<AttendanceRequestResponse>(`${apiBaseUrl}/v1/self-service/start`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function endEmployeeShift(
+  payload: EndShiftRequest,
+): Promise<AttendanceRequestResponse> {
+  return fetchJson<AttendanceRequestResponse>(`${apiBaseUrl}/v1/self-service/end`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function listAttendanceRequests(status?: string): Promise<AttendanceRequestResponse[]> {
+  const query = buildQueryString({ status });
+  return fetchJson<AttendanceRequestResponse[]>(`${apiBaseUrl}/v1/attendance-requests${query}`);
+}
+
+export async function approveAttendanceRequest(
+  requestId: string,
+  payload: AttendanceApprovalDecisionRequest,
+): Promise<AttendanceRequestResponse> {
+  return fetchJson<AttendanceRequestResponse>(`${apiBaseUrl}/v1/attendance-requests/${requestId}/approve`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function rejectAttendanceRequest(
+  requestId: string,
+  payload: AttendanceApprovalDecisionRequest,
+): Promise<AttendanceRequestResponse> {
+  return fetchJson<AttendanceRequestResponse>(`${apiBaseUrl}/v1/attendance-requests/${requestId}/reject`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function getCostProjection(month?: string): Promise<CostProjectionResponse> {
+  const query = buildQueryString({ month });
+  return fetchJson<CostProjectionResponse>(`${apiBaseUrl}/v1/insights/cost-projection${query}`);
+}
+
+export async function listPayrollConnectors(): Promise<PayrollConnectorResponse[]> {
+  return fetchJson<PayrollConnectorResponse[]>(`${apiBaseUrl}/v1/payroll-connectors`);
+}
+
+export async function upsertPayrollConnector(
+  payload: PayrollConnectorUpsertRequest,
+  connectorId?: string,
+): Promise<PayrollConnectorResponse> {
+  const query = buildQueryString({ connector_id: connectorId });
+  return fetchJson<PayrollConnectorResponse>(`${apiBaseUrl}/v1/payroll-connectors${query}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function dispatchPayrollConnector(
+  connectorId: string,
+  month?: string,
+): Promise<ConnectorDispatchResponse> {
+  const query = buildQueryString({ month });
+  return fetchJson<ConnectorDispatchResponse>(
+    `${apiBaseUrl}/v1/payroll-connectors/${connectorId}/dispatch${query}`,
+    {
+      method: "POST",
+    },
+  );
 }

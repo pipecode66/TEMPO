@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 from sqlalchemy import Select, func, or_, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.db.models import Employee, TimeEntry
 
@@ -20,6 +20,7 @@ class EmployeeRepository:
         query: Select[tuple[Employee]] = select(Employee).where(
             Employee.company_id == company_id
         )
+        query = query.options(joinedload(Employee.policy_assignment))
         if search:
             pattern = f"%{search.lower()}%"
             query = query.where(
@@ -40,6 +41,7 @@ class EmployeeRepository:
                 Employee.company_id == company_id,
                 Employee.id == employee_id,
             )
+            .options(joinedload(Employee.policy_assignment))
         )
 
     def get_by_identity(
@@ -61,7 +63,7 @@ class EmployeeRepository:
         else:
             return None
 
-        return db.scalar(select(Employee).where(*conditions))
+        return db.scalar(select(Employee).where(*conditions).options(joinedload(Employee.policy_assignment)))
 
     def create(self, db: Session, **data: object) -> Employee:
         employee = Employee(**data)

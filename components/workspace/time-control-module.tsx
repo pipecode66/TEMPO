@@ -191,6 +191,8 @@ export function TimeControlModule() {
         horas_semanales_pactadas: parseOptionalNumber(formState.horasSemanalesPactadas),
         horas_diarias_pactadas: parseOptionalNumber(formState.horasDiariasPactadas),
         divisor_hora_mensual: parseOptionalNumber(formState.divisorHoraMensual),
+        jurisdiction_code:
+          selectedEmployee?.jurisdictionCode ?? policySettings.jurisdictionCode,
         fecha_referencia_normativa: formState.fechaNormativa,
         recargo_descanso_obligatorio: parseOptionalNumber(
           formState.recargoDescansoObligatorio,
@@ -543,6 +545,12 @@ export function TimeControlModule() {
                       <p className="text-sm text-muted-foreground">Horas del turno</p>
                       <p className="mt-2 text-3xl font-display text-foreground">
                         {formatHours(result.horas_totales_dia)}
+                      </p>
+                    </div>
+                    <div className="rounded-2xl bg-background/60 p-4">
+                      <p className="text-sm text-muted-foreground">Costo extra proyectado</p>
+                      <p className="mt-2 text-3xl font-display text-foreground">
+                        {formatCurrency(result.costo_extra_proyectado)}
                       </p>
                     </div>
                     <div className="rounded-2xl bg-background/60 p-4">

@@ -186,7 +186,10 @@ def collect_alerts(
 
 
 def calcular_jornada_diaria(request: CalculoJornadaRequest) -> CalculoJornadaResponse:
-    rates = get_legal_rates(request.configuracion.fecha_referencia_normativa)
+    rates = get_legal_rates(
+        request.configuracion.fecha_referencia_normativa,
+        request.configuracion.jurisdiction_code,
+    )
     weekly_limit = resolve_weekly_ordinary_limit(request, rates)
     daily_limit = resolve_daily_ordinary_limit(request, rates, weekly_limit)
     hourly_rate = resolve_hourly_rate(request, weekly_limit)
@@ -236,6 +239,7 @@ def calcular_jornada_diaria(request: CalculoJornadaRequest) -> CalculoJornadaRes
 
     breakdown: dict[str, DesgloseItem] = {}
     total_value = 0.0
+    projected_extra_cost = 0.0
 
     for key, minutes in bucket_minutes.items():
         hours = round(minutes / 60, 4)
@@ -244,6 +248,7 @@ def calcular_jornada_diaria(request: CalculoJornadaRequest) -> CalculoJornadaRes
         base_value = round(hours * hourly_rate, 2)
         total_category_value = round(hours * hourly_rate * factor_total, 2)
         total_value += total_category_value
+        projected_extra_cost += round(total_category_value - base_value, 2)
         breakdown[key] = DesgloseItem(
             etiqueta=CATEGORY_LABELS[key],
             horas=hours,
@@ -262,11 +267,16 @@ def calcular_jornada_diaria(request: CalculoJornadaRequest) -> CalculoJornadaRes
     return CalculoJornadaResponse(
         valor_total_dia=round(total_value, 2),
         valor_hora_ordinaria=round(hourly_rate, 4),
+        costo_extra_proyectado=round(projected_extra_cost, 2),
         horas_totales_dia=total_hours,
         desglose_horas=breakdown,
         alerta_limite_legal=bool(alerts),
         alertas=alerts,
         reglas_aplicadas={
+            "jurisdiction_code": rates.jurisdiction.code,
+            "jurisdiction_name": rates.jurisdiction.name,
+            "country_code": rates.jurisdiction.country_code,
+            "subdivision_code": rates.jurisdiction.subdivision_code,
             "fecha_referencia_normativa": rates.reference_date.isoformat(),
             "jornada_ordinaria_maxima_semanal": weekly_limit,
             "jornada_diaria_pactada": round(daily_limit, 4),

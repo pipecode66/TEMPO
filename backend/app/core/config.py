@@ -23,6 +23,7 @@ class Settings(BaseSettings):
     cors_origins: Annotated[list[str], NoDecode] = Field(
         default_factory=lambda: ["http://127.0.0.1:3000", "http://localhost:3000"]
     )
+    frontend_origin: str | None = None
 
     jwt_secret_key: str = "change-this-secret-in-production"
     jwt_algorithm: str = "HS256"
@@ -82,6 +83,13 @@ class Settings(BaseSettings):
             return database_url.replace("postgresql://", "postgresql+psycopg://", 1)
 
         return database_url
+
+    @property
+    def portal_base_url(self) -> str:
+        base_origin = self.frontend_origin or (
+            self.cors_origins[0] if self.cors_origins else "http://localhost:3000"
+        )
+        return f"{base_origin.rstrip('/')}/portal"
 
 
 @lru_cache

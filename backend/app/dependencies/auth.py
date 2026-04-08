@@ -7,12 +7,14 @@ from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.core.security import decode_token
-from app.db.models import User, UserRole
+from app.db.models import Employee, User, UserRole
 from app.db.session import get_db
+from app.repositories.employee_repository import EmployeeRepository
 from app.repositories.user_repository import UserRepository
 
 
 user_repository = UserRepository()
+employee_repository = EmployeeRepository()
 
 
 def get_current_user(
@@ -78,3 +80,29 @@ def require_roles(*allowed_roles: UserRole) -> Callable[[User], User]:
         return current_user
 
     return dependency
+
+
+def require_portal_user(current_user: User = Depends(get_current_user)) -> User:
+    if current_user.role != UserRole.CONSULTA:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Este modulo es exclusivo para autoservicio del empleado.",
+        )
+    return current_user
+
+
+def get_current_employee(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_portal_user),
+) -> Employee:
+    employee = employee_repository.get_by_identity(
+        db,
+        company_id=current_user.company_id,
+        email=current_user.email,
+    )
+    if not employee:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No se encontro un empleado asociado a este usuario.",
+        )
+    return employee

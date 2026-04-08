@@ -13,6 +13,9 @@ class UserRepository:
     def get_by_email(self, db: Session, email: str) -> User | None:
         return db.scalar(select(User).where(User.email == email.lower()))
 
+    def list_by_company(self, db: Session, *, company_id: str) -> list[User]:
+        return db.scalars(select(User).where(User.company_id == company_id)).all()
+
     def create(self, db: Session, **data: object) -> User:
         user = User(**data)
         db.add(user)

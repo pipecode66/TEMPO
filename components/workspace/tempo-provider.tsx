@@ -18,6 +18,7 @@ import {
   type CompanyResponse,
   type CompanySettingsResponse,
   type EmployeeCreateRequest,
+  type EmployeePortalAccessRequest,
   type EmployeeResponse,
   type EmployeeStatus,
   type ReportFilters,
@@ -32,6 +33,7 @@ import {
   downloadImportErrors,
   downloadReportCsv,
   downloadReportJson,
+  enableEmployeePortalAccess,
   getCompanyProfile,
   getReports,
   importTimeEntries,
@@ -56,6 +58,8 @@ export type EmployeeRecord = {
   jornadaSemanalHoras: number;
   diasLaboralesSemana: 5 | 6;
   estado: EmployeeStatus;
+  jurisdictionCode: string;
+  portalAccessEnabled: boolean;
   createdAt: string;
   updatedAt: string;
 };
@@ -71,6 +75,7 @@ export type EmployeeDraft = {
   jornadaSemanalHoras: number;
   diasLaboralesSemana: 5 | 6;
   estado: EmployeeStatus;
+  jurisdictionCode: string;
 };
 
 export type CompanyProfile = {
@@ -84,6 +89,9 @@ export type CompanyProfile = {
 };
 
 export type PolicySettings = {
+  jurisdictionCode: string;
+  countryCode: string;
+  subdivisionCode: string;
   jornadaSemanalMaxima: number;
   diasLaboralesSemana: 5 | 6;
   limiteExtrasDiarias: number;
@@ -92,6 +100,7 @@ export type PolicySettings = {
   horarioNocturnoFin: string;
   alertasAutomaticas: boolean;
   cierreSemanalAutomatico: boolean;
+  requiresQrForField: boolean;
   recargoDescansoObligatorio: number;
   fechaNormativa: string;
 };
@@ -157,6 +166,10 @@ type TempoWorkspaceContextValue = TempoWorkspaceState & {
     employeeId: string,
     status: EmployeeStatus,
   ) => Promise<EmployeeRecord>;
+  provisionEmployeePortalAccess: (
+    employeeId: string,
+    payload: EmployeePortalAccessRequest,
+  ) => Promise<EmployeeRecord>;
   removeEmployee: (employeeId: string) => Promise<void>;
   addTimeEntry: (entry: TimeEntryDraft) => Promise<TimeEntryRecord>;
   removeTimeEntry: (entryId: string) => Promise<void>;
@@ -187,6 +200,9 @@ const defaultCompanyProfile: CompanyProfile = {
 };
 
 const defaultPolicySettings: PolicySettings = {
+  jurisdictionCode: "co-national-2026",
+  countryCode: "CO",
+  subdivisionCode: "",
   jornadaSemanalMaxima: 42,
   diasLaboralesSemana: 5,
   limiteExtrasDiarias: 2,
@@ -195,6 +211,7 @@ const defaultPolicySettings: PolicySettings = {
   horarioNocturnoFin: "06:00",
   alertasAutomaticas: true,
   cierreSemanalAutomatico: false,
+  requiresQrForField: false,
   recargoDescansoObligatorio: 0.9,
   fechaNormativa: "2026-07-15",
 };
@@ -215,6 +232,9 @@ function mapCompanyProfile(company: CompanyResponse): CompanyProfile {
 
 function mapPolicySettings(settings: CompanySettingsResponse): PolicySettings {
   return {
+    jurisdictionCode: settings.jurisdiction_code,
+    countryCode: settings.country_code,
+    subdivisionCode: settings.subdivision_code ?? "",
     jornadaSemanalMaxima: settings.jornada_semanal_maxima,
     diasLaboralesSemana: settings.dias_laborales_semana,
     limiteExtrasDiarias: settings.limite_extras_diarias,
@@ -223,6 +243,7 @@ function mapPolicySettings(settings: CompanySettingsResponse): PolicySettings {
     horarioNocturnoFin: settings.horario_nocturno_fin,
     alertasAutomaticas: settings.alertas_automaticas,
     cierreSemanalAutomatico: settings.cierre_semanal_automatico,
+    requiresQrForField: settings.requires_qr_for_field,
     recargoDescansoObligatorio: settings.recargo_descanso_obligatorio,
     fechaNormativa: settings.fecha_normativa,
   };
@@ -241,6 +262,8 @@ function mapEmployee(employee: EmployeeResponse): EmployeeRecord {
     jornadaSemanalHoras: employee.weekly_hours,
     diasLaboralesSemana: employee.work_days_per_week,
     estado: employee.status,
+    jurisdictionCode: employee.jurisdiction_code,
+    portalAccessEnabled: employee.portal_access_enabled,
     createdAt: employee.created_at,
     updatedAt: employee.updated_at,
   };
@@ -292,6 +315,7 @@ function mapEmployeeDraftToApi(employee: EmployeeDraft): EmployeeCreateRequest {
     weekly_hours: employee.jornadaSemanalHoras,
     work_days_per_week: employee.diasLaboralesSemana,
     status: employee.estado,
+    jurisdiction_code: employee.jurisdictionCode,
   };
 }
 
@@ -441,6 +465,22 @@ export function TempoProvider({ children }: { children: ReactNode }) {
         await loadWorkspace();
         return mapped;
       },
+      provisionEmployeePortalAccess: async (employeeId, payload) => {
+        const updated = await runWithSessionRetry(() =>
+          enableEmployeePortalAccess(employeeId, payload),
+        );
+        const mapped = mapEmployee(updated);
+        startTransition(() => {
+          setEmployees((current) =>
+            current.map((employee) =>
+              employee.id === employeeId ? mapped : employee,
+            ),
+          );
+          setLastError(null);
+        });
+        await loadWorkspace();
+        return mapped;
+      },
       removeEmployee: async (employeeId) => {
         await runWithSessionRetry(() => deleteEmployee(employeeId));
         startTransition(() => {
@@ -484,6 +524,9 @@ export function TempoProvider({ children }: { children: ReactNode }) {
             payroll_contact_email: profile.emailNomina || null,
             notes: profile.notas || null,
             settings: {
+              jurisdiction_code: policySettings.jurisdictionCode,
+              country_code: policySettings.countryCode,
+              subdivision_code: policySettings.subdivisionCode || null,
               jornada_semanal_maxima: policySettings.jornadaSemanalMaxima,
               dias_laborales_semana: policySettings.diasLaboralesSemana,
               limite_extras_diarias: policySettings.limiteExtrasDiarias,
@@ -492,6 +535,7 @@ export function TempoProvider({ children }: { children: ReactNode }) {
               horario_nocturno_fin: policySettings.horarioNocturnoFin,
               alertas_automaticas: policySettings.alertasAutomaticas,
               cierre_semanal_automatico: policySettings.cierreSemanalAutomatico,
+              requires_qr_for_field: policySettings.requiresQrForField,
               recargo_descanso_obligatorio: policySettings.recargoDescansoObligatorio,
               fecha_normativa: policySettings.fechaNormativa,
             },
@@ -515,6 +559,9 @@ export function TempoProvider({ children }: { children: ReactNode }) {
             payroll_contact_email: companyProfile.emailNomina || null,
             notes: companyProfile.notas || null,
             settings: {
+              jurisdiction_code: settings.jurisdictionCode,
+              country_code: settings.countryCode,
+              subdivision_code: settings.subdivisionCode || null,
               jornada_semanal_maxima: settings.jornadaSemanalMaxima,
               dias_laborales_semana: settings.diasLaboralesSemana,
               limite_extras_diarias: settings.limiteExtrasDiarias,
@@ -523,6 +570,7 @@ export function TempoProvider({ children }: { children: ReactNode }) {
               horario_nocturno_fin: settings.horarioNocturnoFin,
               alertas_automaticas: settings.alertasAutomaticas,
               cierre_semanal_automatico: settings.cierreSemanalAutomatico,
+              requires_qr_for_field: settings.requiresQrForField,
               recargo_descanso_obligatorio: settings.recargoDescansoObligatorio,
               fecha_normativa: settings.fechaNormativa,
             },

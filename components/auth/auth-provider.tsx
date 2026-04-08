@@ -27,6 +27,7 @@ type PermissionSet = {
   canManageTimeEntries: boolean;
   canManageCompany: boolean;
   canManageSettings: boolean;
+  canApproveAttendance: boolean;
   canViewAudit: boolean;
 };
 
@@ -46,6 +47,7 @@ const emptyPermissions: PermissionSet = {
   canManageTimeEntries: false,
   canManageCompany: false,
   canManageSettings: false,
+  canApproveAttendance: false,
   canViewAudit: false,
 };
 
@@ -59,6 +61,7 @@ function resolvePermissions(role: UserRole | undefined): PermissionSet {
         canManageTimeEntries: true,
         canManageCompany: true,
         canManageSettings: true,
+        canApproveAttendance: true,
         canViewAudit: true,
       };
     case "nomina":
@@ -67,6 +70,7 @@ function resolvePermissions(role: UserRole | undefined): PermissionSet {
         canManageTimeEntries: true,
         canManageCompany: true,
         canManageSettings: true,
+        canApproveAttendance: true,
         canViewAudit: true,
       };
     case "supervisor":
@@ -75,6 +79,7 @@ function resolvePermissions(role: UserRole | undefined): PermissionSet {
         canManageTimeEntries: true,
         canManageCompany: false,
         canManageSettings: false,
+        canApproveAttendance: true,
         canViewAudit: false,
       };
     default:

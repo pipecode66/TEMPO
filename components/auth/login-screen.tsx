@@ -32,10 +32,10 @@ export function LoginScreen() {
   useEffect(() => {
     if (!isAuthLoading && isAuthenticated) {
       startTransition(() => {
-        router.replace("/dashboard");
+        router.replace(user?.role === "consulta" ? "/portal" : "/dashboard");
       });
     }
-  }, [isAuthenticated, isAuthLoading, router]);
+  }, [isAuthenticated, isAuthLoading, router, user?.role]);
 
   const handleLogin = async (e: FormEvent) => {
     e.preventDefault();
@@ -52,7 +52,9 @@ export function LoginScreen() {
         `Acceso correcto. Redirigiendo al panel de ${authenticatedUser.full_name}...`,
       );
       startTransition(() => {
-        router.replace("/dashboard");
+        router.replace(
+          authenticatedUser.role === "consulta" ? "/portal" : "/dashboard",
+        );
       });
     } catch (authError) {
       setError(getApiErrorMessage(authError));

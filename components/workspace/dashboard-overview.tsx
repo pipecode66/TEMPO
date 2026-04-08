@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
   AlertTriangle,
@@ -23,12 +24,19 @@ import {
 } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Separator } from "@/components/ui/separator";
+import { getApiErrorMessage } from "@/lib/fetch-json";
 import {
   formatCurrency,
   formatHours,
   formatLongDate,
   formatShortDateTime,
 } from "@/lib/tempo-format";
+import {
+  getCostProjection,
+  listAttendanceRequests,
+  type AttendanceRequestResponse,
+  type CostProjectionResponse,
+} from "@/lib/tempo-api";
 import { useTempoWorkspace } from "@/components/workspace/tempo-provider";
 
 function getOnboardingScore(checks: boolean[]): number {
@@ -38,6 +46,9 @@ function getOnboardingScore(checks: boolean[]): number {
 
 export function DashboardOverview() {
   const { employees, timeEntries, companyProfile, policySettings } = useTempoWorkspace();
+  const [projection, setProjection] = useState<CostProjectionResponse | null>(null);
+  const [pendingRequests, setPendingRequests] = useState<AttendanceRequestResponse[]>([]);
+  const [insightError, setInsightError] = useState("");
 
   const activeEmployees = employees.filter((employee) => employee.estado === "activo");
   const protectedMinors = employees.filter((employee) => employee.edad <= 17);
@@ -50,6 +61,23 @@ export function DashboardOverview() {
     (total, entry) => total + entry.response.horas_totales_dia,
     0,
   );
+
+  useEffect(() => {
+    async function loadInsights() {
+      try {
+        const [nextProjection, requests] = await Promise.all([
+          getCostProjection(),
+          listAttendanceRequests("pending"),
+        ]);
+        setProjection(nextProjection);
+        setPendingRequests(requests);
+      } catch (error) {
+        setInsightError(getApiErrorMessage(error));
+      }
+    }
+
+    void loadInsights();
+  }, []);
 
   const onboardingChecks = [
     companyProfile.nombreLegal.length > 0,
@@ -86,6 +114,13 @@ export function DashboardOverview() {
           title: "Revisa alertas legales",
           text: `${alertEntries.length} jornadas generaron alertas por topes o restricciones.`,
           href: "/reportes",
+        }
+      : null,
+    pendingRequests.length > 0
+      ? {
+          title: "Aprueba jornadas pendientes",
+          text: `${pendingRequests.length} solicitudes esperan revisión de supervisión o nómina.`,
+          href: "/aprobaciones",
         }
       : null,
   ].filter(Boolean) as { title: string; text: string; href: string }[];
@@ -130,19 +165,20 @@ export function DashboardOverview() {
 
         <Card className="border-border/80 bg-card/80">
           <CardHeader className="space-y-0">
-            <CardDescription>Nomina base mensual</CardDescription>
+            <CardDescription>Base vs proyeccion extra</CardDescription>
             <div className="flex items-center justify-between">
               <CardTitle className="text-3xl font-display">
-                {formatCurrency(totalPayrollBase)}
+                {formatCurrency(projection?.projected_month_end_extra_cost ?? totalPayrollBase)}
               </CardTitle>
               <Building2 className="h-5 w-5 text-muted-foreground" />
             </div>
           </CardHeader>
           <CardContent className="space-y-2">
             <p className="text-sm text-muted-foreground">
-              Proyeccion base segun salarios registrados.
+              Base salarial: {formatCurrency(totalPayrollBase)}. Extra proyectado:{" "}
+              {formatCurrency(projection?.projected_month_end_extra_cost ?? 0)}.
             </p>
-            <Badge variant="secondary">Sin recargos incluidos</Badge>
+            <Badge variant="secondary">Costo mensual visible</Badge>
           </CardContent>
         </Card>
 
@@ -182,8 +218,16 @@ export function DashboardOverview() {
                 ? `${alertEntries.length} jornadas requieren revision.`
                 : "No hay alertas legales pendientes."}
             </p>
-            <Badge variant={alertEntries.length > 0 ? "destructive" : "secondary"}>
-              {alertEntries.length > 0 ? "Atencion requerida" : "Operacion estable"}
+            <Badge
+              variant={
+                alertEntries.length > 0 || pendingRequests.length > 0
+                  ? "destructive"
+                  : "secondary"
+              }
+            >
+              {alertEntries.length > 0 || pendingRequests.length > 0
+                ? "Atencion requerida"
+                : "Operacion estable"}
             </Badge>
           </CardContent>
         </Card>
@@ -335,6 +379,7 @@ export function DashboardOverview() {
               {[
                 { href: "/empleados", label: "Alta de empleado", icon: Users },
                 { href: "/control-tiempo", label: "Registrar jornada", icon: Clock3 },
+                { href: "/aprobaciones", label: "Revisar aprobaciones", icon: ShieldCheck },
                 { href: "/reportes", label: "Revisar reportes", icon: FileText },
               ].map((item) => (
                 <Button
@@ -354,6 +399,11 @@ export function DashboardOverview() {
               ))}
             </CardContent>
           </Card>
+          {insightError ? (
+            <div className="rounded-2xl bg-background/60 px-4 py-4 text-sm text-muted-foreground">
+              {insightError}
+            </div>
+          ) : null}
         </div>
       </div>
     </div>

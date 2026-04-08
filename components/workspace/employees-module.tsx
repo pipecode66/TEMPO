@@ -1,7 +1,7 @@
 "use client";
 
-import { useDeferredValue, useState, type FormEvent } from "react";
-import { Search, Trash2, UserPlus, Users } from "lucide-react";
+import { useDeferredValue, useEffect, useState, type FormEvent } from "react";
+import { KeyRound, Search, ShieldCheck, Trash2, UserPlus, Users } from "lucide-react";
 
 import { useAuth } from "@/components/auth/auth-provider";
 import { Badge } from "@/components/ui/badge";
@@ -29,7 +29,9 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { getApiErrorMessage } from "@/lib/fetch-json";
 import { formatCurrency, formatHours } from "@/lib/tempo-format";
+import { listJurisdictions, type JurisdictionOption } from "@/lib/tempo-api";
 import {
   type EmployeeDraft,
   type EmployeeStatus,
@@ -46,6 +48,7 @@ const defaultFormState = {
   jornadaSemanalHoras: "42",
   diasLaboralesSemana: "5",
   estado: "activo",
+  jurisdictionCode: "co-national-2026",
 };
 
 export function EmployeesModule() {
@@ -53,15 +56,22 @@ export function EmployeesModule() {
     employees,
     addEmployee,
     policySettings,
+    provisionEmployeePortalAccess,
     removeEmployee,
     updateEmployeeStatus,
     isSyncing,
   } = useTempoWorkspace();
   const { permissions } = useAuth();
+  const [jurisdictions, setJurisdictions] = useState<JurisdictionOption[]>([]);
   const [formState, setFormState] = useState({
     ...defaultFormState,
     jornadaSemanalHoras: String(policySettings.jornadaSemanalMaxima),
     diasLaboralesSemana: String(policySettings.diasLaboralesSemana),
+    jurisdictionCode: policySettings.jurisdictionCode,
+  });
+  const [portalSetup, setPortalSetup] = useState({
+    employeeId: "",
+    password: "",
   });
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"todos" | EmployeeStatus>("todos");
@@ -69,6 +79,7 @@ export function EmployeesModule() {
     null,
   );
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isProvisioningPortal, setIsProvisioningPortal] = useState(false);
 
   const deferredSearch = useDeferredValue(search);
   const normalizedSearch = deferredSearch.trim().toLowerCase();
@@ -77,7 +88,13 @@ export function EmployeesModule() {
     const matchesSearch =
       normalizedSearch.length === 0
         ? true
-        : [employee.nombre, employee.email, employee.cargo, employee.area]
+        : [
+            employee.nombre,
+            employee.email,
+            employee.cargo,
+            employee.area,
+            employee.jurisdictionCode,
+          ]
             .join(" ")
             .toLowerCase()
             .includes(normalizedSearch);
@@ -95,6 +112,22 @@ export function EmployeesModule() {
       ? 0
       : employees.reduce((total, employee) => total + employee.jornadaSemanalHoras, 0) /
         employees.length;
+
+  useEffect(() => {
+    async function loadJurisdictions() {
+      try {
+        const items = await listJurisdictions();
+        setJurisdictions(items);
+      } catch (error) {
+        setFeedback({
+          type: "error",
+          text: getApiErrorMessage(error),
+        });
+      }
+    }
+
+    void loadJurisdictions();
+  }, []);
 
   function updateField(field: keyof typeof formState, value: string) {
     setFormState((current) => ({
@@ -159,6 +192,7 @@ export function EmployeesModule() {
       jornadaSemanalHoras,
       diasLaboralesSemana: Number(formState.diasLaboralesSemana) as 5 | 6,
       estado: formState.estado as EmployeeStatus,
+      jurisdictionCode: formState.jurisdictionCode,
     };
 
     try {
@@ -168,6 +202,7 @@ export function EmployeesModule() {
         ...defaultFormState,
         jornadaSemanalHoras: String(policySettings.jornadaSemanalMaxima),
         diasLaboralesSemana: String(policySettings.diasLaboralesSemana),
+        jurisdictionCode: policySettings.jurisdictionCode,
       });
       setFeedback({
         type: "success",
@@ -180,6 +215,43 @@ export function EmployeesModule() {
       });
     } finally {
       setIsSubmitting(false);
+    }
+  }
+
+  async function handleProvisionPortal(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!permissions.canManageEmployees) {
+      setFeedback({
+        type: "error",
+        text: "Tu rol no puede habilitar autoservicio de empleados.",
+      });
+      return;
+    }
+    if (!portalSetup.employeeId || !portalSetup.password.trim()) {
+      setFeedback({
+        type: "error",
+        text: "Selecciona un empleado y define una contraseña temporal.",
+      });
+      return;
+    }
+
+    try {
+      setIsProvisioningPortal(true);
+      await provisionEmployeePortalAccess(portalSetup.employeeId, {
+        password: portalSetup.password,
+      });
+      setPortalSetup({ employeeId: "", password: "" });
+      setFeedback({
+        type: "success",
+        text: "Portal del empleado habilitado correctamente.",
+      });
+    } catch (error) {
+      setFeedback({
+        type: "error",
+        text: getApiErrorMessage(error),
+      });
+    } finally {
+      setIsProvisioningPortal(false);
     }
   }
 
@@ -216,7 +288,7 @@ export function EmployeesModule() {
         </Card>
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
+      <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
         <Card className="bg-card/80">
           <CardHeader className="border-b border-border/80">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
@@ -235,7 +307,7 @@ export function EmployeesModule() {
                   <Input
                     value={search}
                     onChange={(event) => setSearch(event.target.value)}
-                    placeholder="Buscar por nombre, email o area"
+                    placeholder="Buscar por nombre, email, area o jurisdiccion"
                     className="pl-9"
                   />
                 </div>
@@ -276,6 +348,7 @@ export function EmployeesModule() {
                     <TableHead>Empleado</TableHead>
                     <TableHead>Rol</TableHead>
                     <TableHead>Condicion</TableHead>
+                    <TableHead>Jurisdiccion</TableHead>
                     <TableHead>Salario</TableHead>
                     <TableHead>Estado</TableHead>
                     <TableHead className="text-right">Acciones</TableHead>
@@ -303,6 +376,16 @@ export function EmployeesModule() {
                           </Badge>
                           <Badge variant="outline">
                             {employee.diasLaboralesSemana} dias / {employee.jornadaSemanalHoras}h
+                          </Badge>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="space-y-2">
+                          <Badge variant="outline">{employee.jurisdictionCode}</Badge>
+                          <Badge
+                            variant={employee.portalAccessEnabled ? "secondary" : "outline"}
+                          >
+                            {employee.portalAccessEnabled ? "Portal activo" : "Sin portal"}
                           </Badge>
                         </div>
                       </TableCell>
@@ -368,90 +451,109 @@ export function EmployeesModule() {
           </CardContent>
         </Card>
 
-        <Card className="bg-card/80">
-          <CardHeader>
-            <CardTitle>Nuevo empleado</CardTitle>
-            <CardDescription>
-              Guarda la ficha basica del colaborador en la base central de Tempo.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="grid gap-4 sm:grid-cols-2">
-                <Input
-                  value={formState.nombre}
-                  onChange={(event) => updateField("nombre", event.target.value)}
-                  placeholder="Nombre completo"
-                  disabled={!permissions.canManageEmployees}
-                />
-                <Input
-                  type="email"
-                  value={formState.email}
-                  onChange={(event) => updateField("email", event.target.value)}
-                  placeholder="correo@empresa.com"
-                  disabled={!permissions.canManageEmployees}
-                />
-              </div>
+        <div className="space-y-6">
+          <Card className="bg-card/80">
+            <CardHeader>
+              <CardTitle>Nuevo empleado</CardTitle>
+              <CardDescription>
+                Guarda la ficha base del colaborador y asígnale la regla normativa correcta.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <Input
+                    value={formState.nombre}
+                    onChange={(event) => updateField("nombre", event.target.value)}
+                    placeholder="Nombre completo"
+                    disabled={!permissions.canManageEmployees}
+                  />
+                  <Input
+                    type="email"
+                    value={formState.email}
+                    onChange={(event) => updateField("email", event.target.value)}
+                    placeholder="correo@empresa.com"
+                    disabled={!permissions.canManageEmployees}
+                  />
+                </div>
 
-              <div className="grid gap-4 sm:grid-cols-2">
-                <Input
-                  value={formState.cargo}
-                  onChange={(event) => updateField("cargo", event.target.value)}
-                  placeholder="Cargo"
-                  disabled={!permissions.canManageEmployees}
-                />
-                <Input
-                  value={formState.area}
-                  onChange={(event) => updateField("area", event.target.value)}
-                  placeholder="Area"
-                  disabled={!permissions.canManageEmployees}
-                />
-              </div>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <Input
+                    value={formState.cargo}
+                    onChange={(event) => updateField("cargo", event.target.value)}
+                    placeholder="Cargo"
+                    disabled={!permissions.canManageEmployees}
+                  />
+                  <Input
+                    value={formState.area}
+                    onChange={(event) => updateField("area", event.target.value)}
+                    placeholder="Area"
+                    disabled={!permissions.canManageEmployees}
+                  />
+                </div>
 
-              <div className="grid gap-4 sm:grid-cols-2">
-                <Input
-                  type="number"
-                  min="15"
-                  value={formState.edad}
-                  onChange={(event) => updateField("edad", event.target.value)}
-                  placeholder="Edad"
-                  disabled={!permissions.canManageEmployees}
-                />
-                <Input
-                  type="number"
-                  min="1"
-                  value={formState.salarioBase}
-                  onChange={(event) => updateField("salarioBase", event.target.value)}
-                  placeholder="Salario base COP"
-                  disabled={!permissions.canManageEmployees}
-                />
-              </div>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <Input
+                    type="number"
+                    min="15"
+                    value={formState.edad}
+                    onChange={(event) => updateField("edad", event.target.value)}
+                    placeholder="Edad"
+                    disabled={!permissions.canManageEmployees}
+                  />
+                  <Input
+                    type="number"
+                    min="1"
+                    value={formState.salarioBase}
+                    onChange={(event) => updateField("salarioBase", event.target.value)}
+                    placeholder="Salario base COP"
+                    disabled={!permissions.canManageEmployees}
+                  />
+                </div>
 
-              <div className="grid gap-4 sm:grid-cols-3">
-                <Input
-                  type="number"
-                  min="1"
-                  max="48"
-                  value={formState.jornadaSemanalHoras}
-                  onChange={(event) =>
-                    updateField("jornadaSemanalHoras", event.target.value)
-                  }
-                  placeholder="Horas/semana"
-                  disabled={!permissions.canManageEmployees}
-                />
-                <Select
-                  value={formState.diasLaboralesSemana}
-                  onValueChange={(value) => updateField("diasLaboralesSemana", value)}
-                  disabled={!permissions.canManageEmployees}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Dias/semana" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="5">5 dias</SelectItem>
-                    <SelectItem value="6">6 dias</SelectItem>
-                  </SelectContent>
-                </Select>
+                <div className="grid gap-4 sm:grid-cols-3">
+                  <Select
+                    value={formState.jurisdictionCode}
+                    onValueChange={(value) => updateField("jurisdictionCode", value)}
+                    disabled={!permissions.canManageEmployees}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Jurisdiccion" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {jurisdictions.map((item) => (
+                        <SelectItem key={item.code} value={item.code}>
+                          {item.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Input
+                    type="number"
+                    min="1"
+                    max="48"
+                    value={formState.jornadaSemanalHoras}
+                    onChange={(event) =>
+                      updateField("jornadaSemanalHoras", event.target.value)
+                    }
+                    placeholder="Horas/semana"
+                    disabled={!permissions.canManageEmployees}
+                  />
+                  <Select
+                    value={formState.diasLaboralesSemana}
+                    onValueChange={(value) => updateField("diasLaboralesSemana", value)}
+                    disabled={!permissions.canManageEmployees}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Dias/semana" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="5">5 dias</SelectItem>
+                      <SelectItem value="6">6 dias</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
                 <Select
                   value={formState.estado}
                   onValueChange={(value) => updateField("estado", value)}
@@ -466,52 +568,128 @@ export function EmployeesModule() {
                     <SelectItem value="retirado">Retirado</SelectItem>
                   </SelectContent>
                 </Select>
-              </div>
 
-              {feedback ? (
-                <div
-                  className={`rounded-2xl px-4 py-3 text-sm ${
-                    feedback.type === "success"
-                      ? "bg-green-500/10 text-green-400"
-                      : "bg-red-500/10 text-red-400"
-                  }`}
-                >
-                  {feedback.text}
-                </div>
-              ) : null}
-
-              <Button
-                type="submit"
-                className="w-full"
-                disabled={!permissions.canManageEmployees || isSubmitting}
-              >
-                <UserPlus className="h-4 w-4" />
-                {isSubmitting ? "Guardando..." : "Guardar empleado"}
-              </Button>
-
-              <div className="rounded-2xl bg-background/60 p-4">
-                <p className="text-sm font-medium text-foreground">Contexto actual</p>
-                <p className="mt-2 text-sm text-muted-foreground">
-                  Jornada maxima legal configurada: {policySettings.jornadaSemanalMaxima}h
-                  semanales en {policySettings.diasLaboralesSemana} dias.
-                </p>
-                <p className="mt-2 text-sm text-muted-foreground">
-                  Masa salarial registrada: {formatCurrency(
-                    employees.reduce((total, employee) => total + employee.salarioBase, 0),
-                  )}
-                </p>
-                <p className="mt-2 text-sm text-muted-foreground">
-                  Usa este formulario para empezar a poblar la operacion con datos reales.
-                </p>
-                {isSyncing ? (
-                  <p className="mt-2 text-xs uppercase tracking-[0.18em] text-muted-foreground">
-                    Sincronizando directorio...
-                  </p>
+                {feedback ? (
+                  <div
+                    className={`rounded-2xl px-4 py-3 text-sm ${
+                      feedback.type === "success"
+                        ? "bg-green-500/10 text-green-400"
+                        : "bg-red-500/10 text-red-400"
+                    }`}
+                  >
+                    {feedback.text}
+                  </div>
                 ) : null}
-              </div>
-            </form>
-          </CardContent>
-        </Card>
+
+                <Button
+                  type="submit"
+                  className="w-full"
+                  disabled={!permissions.canManageEmployees || isSubmitting}
+                >
+                  <UserPlus className="h-4 w-4" />
+                  {isSubmitting ? "Guardando..." : "Guardar empleado"}
+                </Button>
+
+                <div className="rounded-2xl bg-background/60 p-4">
+                  <p className="text-sm font-medium text-foreground">Contexto actual</p>
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    Jornada maxima legal configurada: {policySettings.jornadaSemanalMaxima}h
+                    semanales en {policySettings.diasLaboralesSemana} dias.
+                  </p>
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    Jurisdiccion base: {policySettings.jurisdictionCode}
+                  </p>
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    Masa salarial registrada: {formatCurrency(
+                      employees.reduce((total, employee) => total + employee.salarioBase, 0),
+                    )}
+                  </p>
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    Usa este formulario para poblar la operación con datos reales.
+                  </p>
+                  {isSyncing ? (
+                    <p className="mt-2 text-xs uppercase tracking-[0.18em] text-muted-foreground">
+                      Sincronizando directorio...
+                    </p>
+                  ) : null}
+                </div>
+              </form>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-card/80">
+            <CardHeader>
+              <CardTitle>Portal del empleado</CardTitle>
+              <CardDescription>
+                Habilita autoservicio con contraseña temporal para marcación e historial propio.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={handleProvisionPortal} className="space-y-4">
+                <Select
+                  value={portalSetup.employeeId}
+                  onValueChange={(value) =>
+                    setPortalSetup((current) => ({ ...current, employeeId: value }))
+                  }
+                  disabled={!permissions.canManageEmployees}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecciona empleado para portal" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {employees
+                      .filter((employee) => employee.email)
+                      .map((employee) => (
+                        <SelectItem key={employee.id} value={employee.id}>
+                          {employee.nombre}
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+
+                <Input
+                  type="password"
+                  value={portalSetup.password}
+                  onChange={(event) =>
+                    setPortalSetup((current) => ({
+                      ...current,
+                      password: event.target.value,
+                    }))
+                  }
+                  placeholder="Contraseña temporal"
+                  disabled={!permissions.canManageEmployees}
+                />
+
+                <Button
+                  type="submit"
+                  className="w-full"
+                  disabled={!permissions.canManageEmployees || isProvisioningPortal}
+                >
+                  <KeyRound className="h-4 w-4" />
+                  {isProvisioningPortal ? "Habilitando..." : "Habilitar portal"}
+                </Button>
+
+                <div className="rounded-2xl bg-background/60 p-4">
+                  <p className="text-sm font-medium text-foreground">Qué habilita</p>
+                  <div className="mt-3 space-y-2 text-sm text-muted-foreground">
+                    <p className="flex items-center gap-2">
+                      <ShieldCheck className="h-4 w-4" />
+                      Inicio y fin de jornada con geolocalización
+                    </p>
+                    <p className="flex items-center gap-2">
+                      <ShieldCheck className="h-4 w-4" />
+                      Uso de QR cuando la empresa lo exige
+                    </p>
+                    <p className="flex items-center gap-2">
+                      <ShieldCheck className="h-4 w-4" />
+                      Historial propio y acumulado mensual de extras
+                    </p>
+                  </div>
+                </div>
+              </form>
+            </CardContent>
+          </Card>
+        </div>
       </div>
     </div>
   );

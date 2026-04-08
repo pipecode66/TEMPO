@@ -1,11 +1,15 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import * as XLSX from "xlsx";
 import {
   Download,
   FileJson,
   FileSpreadsheet,
+  Link2,
+  Send,
   ShieldAlert,
+  TrendingUp,
 } from "lucide-react";
 
 import { useAuth } from "@/components/auth/auth-provider";
@@ -35,6 +39,15 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { getApiErrorMessage } from "@/lib/fetch-json";
+import {
+  dispatchPayrollConnector,
+  getCostProjection,
+  listPayrollConnectors,
+  type CostProjectionResponse,
+  type PayrollConnectorResponse,
+  upsertPayrollConnector,
+} from "@/lib/tempo-api";
 import { formatCurrency, formatHours, formatShortDateTime } from "@/lib/tempo-format";
 import { useTempoWorkspace } from "@/components/workspace/tempo-provider";
 
@@ -49,6 +62,29 @@ function downloadFile(filename: string, content: string, contentType: string) {
 
   URL.revokeObjectURL(url);
 }
+
+function downloadExcel(
+  filename: string,
+  rows: Array<Record<string, string | number | boolean>>,
+) {
+  const workbook = XLSX.utils.book_new();
+  const worksheet = XLSX.utils.json_to_sheet(rows);
+  XLSX.utils.book_append_sheet(workbook, worksheet, "Reporte");
+  XLSX.writeFile(workbook, filename);
+}
+
+function getInitialMonthLabel() {
+  return new Date().toISOString().slice(0, 7);
+}
+
+const emptyProjection: CostProjectionResponse = {
+  month_label: "",
+  actual_extra_cost: 0,
+  pending_extra_cost: 0,
+  projected_month_end_extra_cost: 0,
+  approved_hours: 0,
+  pending_hours: 0,
+};
 
 export function ReportsModule() {
   const { permissions } = useAuth();
@@ -70,7 +106,18 @@ export function ReportsModule() {
     area: "all",
     legalAlert: "all",
   });
+  const [selectedMonth, setSelectedMonth] = useState(getInitialMonthLabel());
   const [isExporting, setIsExporting] = useState(false);
+  const [projection, setProjection] = useState<CostProjectionResponse>(emptyProjection);
+  const [connectors, setConnectors] = useState<PayrollConnectorResponse[]>([]);
+  const [connectorForm, setConnectorForm] = useState({
+    name: "",
+    provider: "",
+    endpointUrl: "",
+    authToken: "",
+  });
+  const [isSavingConnector, setIsSavingConnector] = useState(false);
+  const [dispatchingConnectorId, setDispatchingConnectorId] = useState<string | null>(null);
 
   const reportRows = report?.rows ?? [];
   const summary = report?.summary ?? {
@@ -88,6 +135,23 @@ export function ReportsModule() {
 
   const alertRows = reportRows.filter((row) => row.legal_alert);
 
+  async function refreshOperationalPanels(month = selectedMonth) {
+    try {
+      const [nextProjection, nextConnectors] = await Promise.all([
+        getCostProjection(month),
+        listPayrollConnectors(),
+      ]);
+      setProjection(nextProjection);
+      setConnectors(nextConnectors);
+    } catch (error) {
+      setFeedback(getApiErrorMessage(error));
+    }
+  }
+
+  useEffect(() => {
+    void refreshOperationalPanels(selectedMonth);
+  }, []);
+
   async function applyFilters() {
     setFeedback("");
     try {
@@ -101,6 +165,9 @@ export function ReportsModule() {
             ? undefined
             : filters.legalAlert === "true",
       });
+      const nextMonth = (filters.startDate || selectedMonth).slice(0, 7) || selectedMonth;
+      setSelectedMonth(nextMonth);
+      await refreshOperationalPanels(nextMonth);
     } catch (error) {
       setFeedback(
         error instanceof Error ? error.message : "No fue posible cargar el reporte.",
@@ -108,9 +175,27 @@ export function ReportsModule() {
     }
   }
 
-  async function handleExport(format: "csv" | "json") {
+  async function handleExport(format: "csv" | "json" | "xlsx") {
     try {
       setIsExporting(true);
+      if (format === "xlsx") {
+        downloadExcel(
+          `tempo-report-${selectedMonth}.xlsx`,
+          reportRows.map((row) => ({
+            empleado: row.employee_name,
+            area: row.area,
+            fecha: row.work_date,
+            entrada: row.check_in,
+            salida: row.check_out,
+            horas: row.total_hours,
+            valor_total: row.total_value,
+            alerta_legal: row.legal_alert,
+          })),
+        );
+        setFeedback("Reporte exportado en Excel.");
+        return;
+      }
+
       const content = await exportReport(format, {
         start_date: filters.startDate || undefined,
         end_date: filters.endDate || undefined,
@@ -133,6 +218,51 @@ export function ReportsModule() {
       );
     } finally {
       setIsExporting(false);
+    }
+  }
+
+  async function handleSaveConnector() {
+    if (!permissions.canManageSettings) {
+      setFeedback("Solo administracion o nomina pueden configurar conectores.");
+      return;
+    }
+
+    try {
+      setIsSavingConnector(true);
+      setFeedback("");
+      await upsertPayrollConnector({
+        name: connectorForm.name,
+        provider: connectorForm.provider,
+        endpoint_url: connectorForm.endpointUrl,
+        auth_token: connectorForm.authToken || null,
+        payload_format: "json",
+        is_active: true,
+      });
+      setConnectorForm({
+        name: "",
+        provider: "",
+        endpointUrl: "",
+        authToken: "",
+      });
+      await refreshOperationalPanels(selectedMonth);
+      setFeedback("Conector guardado correctamente.");
+    } catch (error) {
+      setFeedback(getApiErrorMessage(error));
+    } finally {
+      setIsSavingConnector(false);
+    }
+  }
+
+  async function handleDispatchConnector(connectorId: string) {
+    try {
+      setDispatchingConnectorId(connectorId);
+      const response = await dispatchPayrollConnector(connectorId, selectedMonth);
+      setFeedback(response.detail);
+      await refreshOperationalPanels(selectedMonth);
+    } catch (error) {
+      setFeedback(getApiErrorMessage(error));
+    } finally {
+      setDispatchingConnectorId(null);
     }
   }
 
@@ -165,9 +295,9 @@ export function ReportsModule() {
         </Card>
         <Card className="bg-card/80">
           <CardHeader className="space-y-1">
-            <CardDescription>Jornadas con alerta</CardDescription>
+            <CardDescription>Proyección mensual</CardDescription>
             <CardTitle className="text-3xl font-display">
-              {summary.legal_alerts}
+              {formatCurrency(projection.projected_month_end_extra_cost)}
             </CardTitle>
           </CardHeader>
         </Card>
@@ -177,7 +307,7 @@ export function ReportsModule() {
         <CardHeader>
           <CardTitle>Filtros operativos</CardTitle>
           <CardDescription>
-            Consulta reportes por fechas, empleado, area y alertas legales.
+            Consulta reportes por fechas, empleado, área y alertas legales.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -221,10 +351,10 @@ export function ReportsModule() {
               }
             >
               <SelectTrigger>
-                <SelectValue placeholder="Area" />
+                <SelectValue placeholder="Área" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Todas las areas</SelectItem>
+                <SelectItem value="all">Todas las áreas</SelectItem>
                 {areas.map((area) => (
                   <SelectItem key={area} value={area}>
                     {area}
@@ -253,8 +383,24 @@ export function ReportsModule() {
             <Button onClick={() => void applyFilters()} disabled={isSyncing}>
               Aplicar filtros
             </Button>
-            <Button variant="outline" onClick={() => void refreshAudit()} disabled={!permissions.canViewAudit}>
-              Refrescar auditoria
+            <Input
+              type="month"
+              value={selectedMonth}
+              onChange={(event) => setSelectedMonth(event.target.value)}
+              className="sm:max-w-52"
+            />
+            <Button
+              variant="outline"
+              onClick={() => void refreshOperationalPanels(selectedMonth)}
+            >
+              Actualizar proyección
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => void refreshAudit()}
+              disabled={!permissions.canViewAudit}
+            >
+              Refrescar auditoría
             </Button>
           </div>
 
@@ -270,8 +416,8 @@ export function ReportsModule() {
         <TabsList>
           <TabsTrigger value="resumen">Resumen</TabsTrigger>
           <TabsTrigger value="cumplimiento">Cumplimiento</TabsTrigger>
-          <TabsTrigger value="auditoria">Auditoria</TabsTrigger>
-          <TabsTrigger value="exportacion">Exportacion</TabsTrigger>
+          <TabsTrigger value="auditoria">Auditoría</TabsTrigger>
+          <TabsTrigger value="exportacion">Exportación e integración</TabsTrigger>
         </TabsList>
 
         <TabsContent value="resumen">
@@ -279,7 +425,7 @@ export function ReportsModule() {
             <CardHeader>
               <CardTitle>Detalle consolidado</CardTitle>
               <CardDescription>
-                Respuesta server-side preparada para operacion y futura integracion con nomina.
+                Corte preparado para operación, nómina y control presupuestal.
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -292,7 +438,7 @@ export function ReportsModule() {
                   <TableHeader>
                     <TableRow>
                       <TableHead>Empleado</TableHead>
-                      <TableHead>Area</TableHead>
+                      <TableHead>Área</TableHead>
                       <TableHead>Fecha</TableHead>
                       <TableHead>Horas</TableHead>
                       <TableHead>Valor</TableHead>
@@ -322,67 +468,104 @@ export function ReportsModule() {
         </TabsContent>
 
         <TabsContent value="cumplimiento">
-          <Card className="bg-card/80">
-            <CardHeader>
-              <CardTitle>Jornadas con alertas legales</CardTitle>
-              <CardDescription>
-                Seguimiento prioritario para topes, proteccion de menores e inconsistencias.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {alertRows.length === 0 ? (
-                <div className="rounded-2xl bg-green-500/10 px-4 py-8 text-sm text-green-300">
-                  No hay jornadas con alertas para este corte.
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {alertRows.map((row) => (
-                    <div
-                      key={row.time_entry_id}
-                      className="rounded-2xl border border-border bg-background/50 p-4"
-                    >
-                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                        <div>
-                          <p className="text-sm font-medium text-foreground">
-                            {row.employee_name}
-                          </p>
-                          <p className="text-xs text-muted-foreground">
-                            {row.work_date} | {row.check_in} - {row.check_out}
-                          </p>
+          <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
+            <Card className="bg-card/80">
+              <CardHeader>
+                <CardTitle>Jornadas con alertas legales</CardTitle>
+                <CardDescription>
+                  Seguimiento prioritario para topes, menores e inconsistencias.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {alertRows.length === 0 ? (
+                  <div className="rounded-2xl bg-green-500/10 px-4 py-8 text-sm text-green-300">
+                    No hay jornadas con alertas para este corte.
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {alertRows.map((row) => (
+                      <div
+                        key={row.time_entry_id}
+                        className="rounded-2xl border border-border bg-background/50 p-4"
+                      >
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                          <div>
+                            <p className="text-sm font-medium text-foreground">
+                              {row.employee_name}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              {row.work_date} | {row.check_in} - {row.check_out}
+                            </p>
+                          </div>
+                          <Badge variant="destructive">
+                            <ShieldAlert className="mr-1 h-3 w-3" />
+                            Revisión necesaria
+                          </Badge>
                         </div>
-                        <Badge variant="destructive">
-                          <ShieldAlert className="h-3 w-3" />
-                          Revision necesaria
-                        </Badge>
+                        <div className="mt-3 text-sm text-muted-foreground">
+                          Valor del turno: {formatCurrency(row.total_value)} en{" "}
+                          {formatHours(row.total_hours)}.
+                        </div>
                       </div>
-                      <div className="mt-3 text-sm text-muted-foreground">
-                        Valor del turno: {formatCurrency(row.total_value)} en{" "}
-                        {formatHours(row.total_hours)}.
-                      </div>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card className="bg-card/80">
+              <CardHeader>
+                <CardTitle>Presión presupuestal</CardTitle>
+                <CardDescription>
+                  Visibilidad del costo extra ya causado y el proyectado para fin de mes.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="rounded-2xl border border-border bg-background/50 p-4">
+                  <p className="text-sm text-muted-foreground">Real aprobado</p>
+                  <p className="mt-2 text-3xl font-display text-foreground">
+                    {formatCurrency(projection.actual_extra_cost)}
+                  </p>
                 </div>
-              )}
-            </CardContent>
-          </Card>
+                <div className="rounded-2xl border border-border bg-background/50 p-4">
+                  <p className="text-sm text-muted-foreground">Pendiente por aprobar</p>
+                  <p className="mt-2 text-3xl font-display text-foreground">
+                    {formatCurrency(projection.pending_extra_cost)}
+                  </p>
+                </div>
+                <div className="rounded-2xl border border-border bg-secondary/60 p-4">
+                  <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+                    <TrendingUp className="h-4 w-4" />
+                    Proyección del mes
+                  </div>
+                  <p className="mt-2 text-3xl font-display text-foreground">
+                    {formatCurrency(projection.projected_month_end_extra_cost)}
+                  </p>
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    Basado en jornadas aprobadas y solicitudes pendientes del corte {selectedMonth}.
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
         </TabsContent>
 
         <TabsContent value="auditoria">
           <Card className="bg-card/80">
             <CardHeader>
-              <CardTitle>Auditoria</CardTitle>
+              <CardTitle>Auditoría</CardTitle>
               <CardDescription>
-                Eventos criticos de autenticacion, cambios maestros y movimientos de jornadas.
+                Eventos de autenticación, maestros, marcaciones y aprobaciones.
               </CardDescription>
             </CardHeader>
             <CardContent>
               {!permissions.canViewAudit ? (
                 <div className="rounded-2xl bg-background/60 px-4 py-8 text-sm text-muted-foreground">
-                  Tu rol no tiene acceso al log de auditoria.
+                  Tu rol no tiene acceso al log de auditoría.
                 </div>
               ) : auditEvents.length === 0 ? (
                 <div className="rounded-2xl bg-background/60 px-4 py-8 text-sm text-muted-foreground">
-                  Aun no hay eventos para mostrar.
+                  Aún no hay eventos para mostrar.
                 </div>
               ) : (
                 <div className="space-y-3">
@@ -419,62 +602,178 @@ export function ReportsModule() {
         </TabsContent>
 
         <TabsContent value="exportacion">
-          <div className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
-            <Card className="bg-card/80">
-              <CardHeader>
-                <CardTitle>Exportar datos</CardTitle>
-                <CardDescription>
-                  Descarga reportes generados por backend en CSV o JSON.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <Button
-                  className="w-full justify-between"
-                  onClick={() => void handleExport("json")}
-                  disabled={isExporting}
-                >
-                  Exportar reporte JSON
-                  <FileJson className="h-4 w-4" />
-                </Button>
-                <Button
-                  variant="outline"
-                  className="w-full justify-between"
-                  onClick={() => void handleExport("csv")}
-                  disabled={isExporting}
-                >
-                  Exportar reporte CSV
-                  <FileSpreadsheet className="h-4 w-4" />
-                </Button>
-              </CardContent>
-            </Card>
-
-            <Card className="bg-card/80">
-              <CardHeader>
-                <CardTitle>Incluido en la exportacion</CardTitle>
-                <CardDescription>
-                  Cobertura actual del corte preparado para operacion y nomina.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {[
-                  `Empleados cubiertos: ${summary.total_employees}`,
-                  `Jornadas incluidas: ${summary.total_time_entries}`,
-                  `Horas liquidadas: ${formatHours(summary.total_hours)}`,
-                  `Alertas legales: ${summary.legal_alerts}`,
-                ].map((item) => (
-                  <div
-                    key={item}
-                    className="flex items-center justify-between rounded-2xl border border-border bg-background/50 px-4 py-3 text-sm"
+          <div className="grid gap-6 xl:grid-cols-[0.8fr_1.2fr]">
+            <div className="space-y-6">
+              <Card className="bg-card/80">
+                <CardHeader>
+                  <CardTitle>Exportar datos</CardTitle>
+                  <CardDescription>
+                    Descarga CSV, JSON o Excel listos para conciliación y carga externa.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <Button
+                    className="w-full justify-between"
+                    onClick={() => void handleExport("xlsx")}
+                    disabled={isExporting}
                   >
-                    <span className="text-foreground">{item}</span>
-                    <Download className="h-4 w-4 text-muted-foreground" />
+                    Exportar reporte Excel
+                    <FileSpreadsheet className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="w-full justify-between"
+                    onClick={() => void handleExport("csv")}
+                    disabled={isExporting}
+                  >
+                    Exportar reporte CSV
+                    <Download className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="w-full justify-between"
+                    onClick={() => void handleExport("json")}
+                    disabled={isExporting}
+                  >
+                    Exportar reporte JSON
+                    <FileJson className="h-4 w-4" />
+                  </Button>
+                </CardContent>
+              </Card>
+
+              <Card className="bg-card/80">
+                <CardHeader>
+                  <CardTitle>Incluido en la exportación</CardTitle>
+                  <CardDescription>
+                    Cobertura del corte preparado para operación y nómina.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {[
+                    `Empleados cubiertos: ${summary.total_employees}`,
+                    `Jornadas incluidas: ${summary.total_time_entries}`,
+                    `Horas liquidadas: ${formatHours(summary.total_hours)}`,
+                    `Alertas legales: ${summary.legal_alerts}`,
+                  ].map((item) => (
+                    <div
+                      key={item}
+                      className="flex items-center justify-between rounded-2xl border border-border bg-background/50 px-4 py-3 text-sm"
+                    >
+                      <span className="text-foreground">{item}</span>
+                      <Download className="h-4 w-4 text-muted-foreground" />
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+            </div>
+
+            <div className="space-y-6">
+              <Card className="bg-card/80">
+                <CardHeader>
+                  <CardTitle>Conectores salientes</CardTitle>
+                  <CardDescription>
+                    Envía el corte a contabilidad o nómina mediante webhook JSON.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <Input
+                      value={connectorForm.name}
+                      onChange={(event) =>
+                        setConnectorForm((current) => ({
+                          ...current,
+                          name: event.target.value,
+                        }))
+                      }
+                      placeholder="Nombre del conector"
+                      disabled={!permissions.canManageSettings}
+                    />
+                    <Input
+                      value={connectorForm.provider}
+                      onChange={(event) =>
+                        setConnectorForm((current) => ({
+                          ...current,
+                          provider: event.target.value,
+                        }))
+                      }
+                      placeholder="Proveedor o ERP"
+                      disabled={!permissions.canManageSettings}
+                    />
+                    <Input
+                      value={connectorForm.endpointUrl}
+                      onChange={(event) =>
+                        setConnectorForm((current) => ({
+                          ...current,
+                          endpointUrl: event.target.value,
+                        }))
+                      }
+                      placeholder="https://..."
+                      disabled={!permissions.canManageSettings}
+                    />
+                    <Input
+                      value={connectorForm.authToken}
+                      onChange={(event) =>
+                        setConnectorForm((current) => ({
+                          ...current,
+                          authToken: event.target.value,
+                        }))
+                      }
+                      placeholder="Token opcional"
+                      disabled={!permissions.canManageSettings}
+                    />
                   </div>
-                ))}
-                <div className="rounded-2xl bg-secondary/50 px-4 py-4 text-sm text-muted-foreground">
-                  La salida JSON queda lista para conectarse a procesos de nomina o conciliacion.
-                </div>
-              </CardContent>
-            </Card>
+                  <Button
+                    onClick={() => void handleSaveConnector()}
+                    disabled={!permissions.canManageSettings || isSavingConnector}
+                  >
+                    <Link2 className="h-4 w-4" />
+                    {isSavingConnector ? "Guardando..." : "Guardar conector"}
+                  </Button>
+
+                  <div className="space-y-3">
+                    {connectors.length === 0 ? (
+                      <div className="rounded-2xl bg-background/60 px-4 py-6 text-sm text-muted-foreground">
+                        No hay conectores configurados todavía.
+                      </div>
+                    ) : (
+                      connectors.map((connector) => (
+                        <div
+                          key={connector.id}
+                          className="rounded-2xl border border-border bg-background/50 p-4"
+                        >
+                          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                            <div>
+                              <p className="text-sm font-medium text-foreground">
+                                {connector.name}
+                              </p>
+                              <p className="text-xs text-muted-foreground">
+                                {connector.provider} | {connector.endpoint_url}
+                              </p>
+                              <p className="mt-2 text-xs text-muted-foreground">
+                                Último envío:{" "}
+                                {connector.last_delivery_at
+                                  ? `${formatShortDateTime(connector.last_delivery_at)} (${connector.last_delivery_status ?? "sin estado"})`
+                                  : "sin historial"}
+                              </p>
+                            </div>
+                            <Button
+                              variant="outline"
+                              onClick={() => void handleDispatchConnector(connector.id)}
+                              disabled={dispatchingConnectorId === connector.id}
+                            >
+                              <Send className="h-4 w-4" />
+                              {dispatchingConnectorId === connector.id
+                                ? "Enviando..."
+                                : "Enviar corte"}
+                            </Button>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
           </div>
         </TabsContent>
       </Tabs>

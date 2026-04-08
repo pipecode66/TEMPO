@@ -18,6 +18,10 @@ class Empleado(BaseModel):
 
 
 class ConfiguracionJornada(BaseModel):
+    jurisdiction_code: str = Field(
+        default="co-national-2026",
+        description="Codigo del paquete legal que se aplicara al calculo.",
+    )
     dias_laborales_semana: Literal[5, 6] = Field(
         default=5, description="Distribucion pactada en 5 o 6 dias."
     )
@@ -90,6 +94,7 @@ class DesgloseItem(BaseModel):
 class CalculoJornadaResponse(BaseModel):
     valor_total_dia: float
     valor_hora_ordinaria: float
+    costo_extra_proyectado: float = 0
     horas_totales_dia: float
     desglose_horas: dict[str, DesgloseItem]
     alerta_limite_legal: bool

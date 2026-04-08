@@ -11,7 +11,7 @@ import {
   Sparkles,
   type LucideIcon,
 } from "lucide-react";
-import type { ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 
 import { useAuth } from "@/components/auth/auth-provider";
 import { Badge } from "@/components/ui/badge";
@@ -61,6 +61,12 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
   const { employees, timeEntries, companyProfile, hydrated, isSyncing } =
     useTempoWorkspace();
   const { logout, permissions, user } = useAuth();
+
+  useEffect(() => {
+    if (user?.role === "consulta") {
+      router.replace("/portal");
+    }
+  }, [router, user?.role]);
 
   const alertCount = timeEntries.filter(
     (entry) => entry.response.alerta_limite_legal,
@@ -192,6 +198,10 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
                 {permissions.canManageTimeEntries ? (
                   <Button asChild>
                     <Link href="/control-tiempo">Registrar jornada</Link>
+                  </Button>
+                ) : permissions.canApproveAttendance ? (
+                  <Button asChild>
+                    <Link href="/aprobaciones">Revisar aprobaciones</Link>
                   </Button>
                 ) : (
                   <Button asChild>

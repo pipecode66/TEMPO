@@ -22,9 +22,14 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { getApiErrorMessage } from "@/lib/fetch-json";
+import { listJurisdictions, type JurisdictionOption } from "@/lib/tempo-api";
 import { useTempoWorkspace } from "@/components/workspace/tempo-provider";
 
 const defaultLegalSettings = {
+  jurisdictionCode: "co-national-2026",
+  countryCode: "CO",
+  subdivisionCode: "",
   jornadaSemanalMaxima: 42,
   diasLaboralesSemana: 5 as 5 | 6,
   limiteExtrasDiarias: 2,
@@ -33,6 +38,7 @@ const defaultLegalSettings = {
   horarioNocturnoFin: "06:00",
   alertasAutomaticas: true,
   cierreSemanalAutomatico: false,
+  requiresQrForField: false,
   recargoDescansoObligatorio: 0.9,
   fechaNormativa: "2026-07-15",
 };
@@ -41,6 +47,7 @@ export function SettingsModule() {
   const { policySettings, refreshWorkspace, savePolicySettings } = useTempoWorkspace();
   const { permissions } = useAuth();
   const [formState, setFormState] = useState(policySettings);
+  const [jurisdictions, setJurisdictions] = useState<JurisdictionOption[]>([]);
   const [message, setMessage] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -48,10 +55,33 @@ export function SettingsModule() {
     setFormState(policySettings);
   }, [policySettings]);
 
+  useEffect(() => {
+    async function loadJurisdictions() {
+      try {
+        const items = await listJurisdictions();
+        setJurisdictions(items);
+      } catch (error) {
+        setMessage(getApiErrorMessage(error));
+      }
+    }
+
+    void loadJurisdictions();
+  }, []);
+
   function updateField(field: keyof typeof formState, value: string | boolean) {
     setFormState((current) => ({
       ...current,
       [field]: value,
+    }));
+  }
+
+  function updateJurisdiction(code: string) {
+    const selected = jurisdictions.find((item) => item.code === code);
+    setFormState((current) => ({
+      ...current,
+      jurisdictionCode: code,
+      countryCode: selected?.country_code ?? current.countryCode,
+      subdivisionCode: selected?.subdivision_code ?? "",
     }));
   }
 
@@ -107,6 +137,35 @@ export function SettingsModule() {
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                <Select
+                  value={formState.jurisdictionCode}
+                  onValueChange={updateJurisdiction}
+                  disabled={!permissions.canManageSettings}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Jurisdiccion" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {jurisdictions.map((item) => (
+                      <SelectItem key={item.code} value={item.code}>
+                        {item.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Input value={formState.countryCode} disabled placeholder="Pais" />
+                <Input
+                  value={formState.subdivisionCode}
+                  disabled
+                  placeholder="Estado o region"
+                />
+                <div className="rounded-2xl border border-border bg-background/50 px-4 py-3 text-sm text-muted-foreground">
+                  Limites: {formState.limiteExtrasDiarias}h/dia y{" "}
+                  {formState.limiteExtrasSemanales}h/semana
+                </div>
+              </div>
+
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 <Input
                   type="number"
@@ -250,10 +309,26 @@ export function SettingsModule() {
               />
             </div>
 
+            <div className="flex items-center justify-between rounded-2xl border border-border bg-background/50 px-4 py-4">
+              <div>
+                <p className="text-sm font-medium text-foreground">Exigir QR en campo</p>
+                <p className="text-sm text-muted-foreground">
+                  Obliga a usar QR de sitio y geolocalizacion para iniciar jornadas de campo.
+                </p>
+              </div>
+              <Switch
+                checked={formState.requiresQrForField}
+                onCheckedChange={(checked) => updateField("requiresQrForField", checked)}
+                disabled={!permissions.canManageSettings}
+              />
+            </div>
+
             <div className="rounded-2xl border border-border bg-background/50 px-4 py-4">
               <div className="flex items-center gap-2">
                 <Badge variant="secondary">Ley base</Badge>
-                <span className="text-sm text-foreground">{formState.fechaNormativa}</span>
+                <span className="text-sm text-foreground">
+                  {formState.jurisdictionCode} | {formState.fechaNormativa}
+                </span>
               </div>
               <p className="mt-3 text-sm text-muted-foreground">
                 Horario nocturno configurado de {formState.horarioNocturnoInicio} a{" "}
