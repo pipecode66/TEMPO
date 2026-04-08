@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import json
 from functools import lru_cache
+from typing import Annotated
 
 from pydantic import Field, field_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -18,7 +20,7 @@ class Settings(BaseSettings):
     debug: bool = False
     api_prefix: str = "/v1"
     database_url: str = "sqlite:///./tempo.db"
-    cors_origins: list[str] = Field(
+    cors_origins: Annotated[list[str], NoDecode] = Field(
         default_factory=lambda: ["http://127.0.0.1:3000", "http://localhost:3000"]
     )
 
@@ -47,6 +49,11 @@ class Settings(BaseSettings):
             return value
         if not value:
             return []
+        normalized = value.strip()
+        if normalized.startswith("["):
+            parsed = json.loads(normalized)
+            if isinstance(parsed, list):
+                return [str(item).strip() for item in parsed if str(item).strip()]
         return [item.strip() for item in value.split(",") if item.strip()]
 
     @field_validator("debug", mode="before")
