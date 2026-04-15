@@ -60,13 +60,17 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
   const moduleMeta = getWorkspaceModule(pathname);
   const { employees, timeEntries, companyProfile, hydrated, isSyncing } =
     useTempoWorkspace();
-  const { logout, permissions, user } = useAuth();
+  const { isLoading: isAuthLoading, logout, permissions, user } = useAuth();
 
   useEffect(() => {
+    if (!isAuthLoading && !user) {
+      router.replace("/");
+      return;
+    }
     if (user?.role === "consulta") {
       router.replace("/portal");
     }
-  }, [router, user?.role]);
+  }, [isAuthLoading, router, user, user?.role]);
 
   const alertCount = timeEntries.filter(
     (entry) => entry.response.alerta_limite_legal,

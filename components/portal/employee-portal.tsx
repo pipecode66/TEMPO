@@ -102,6 +102,12 @@ export function EmployeePortal() {
   }
 
   useEffect(() => {
+    if (!isAuthLoading && !user) {
+      startTransition(() => {
+        router.replace("/");
+      });
+      return;
+    }
     if (!isAuthLoading && user && user.role !== "consulta") {
       startTransition(() => {
         router.replace("/dashboard");

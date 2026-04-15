@@ -21,6 +21,8 @@ class JurisdictionPack:
     name: str
     country_code: str
     subdivision_code: str | None
+    daily_overtime_limit_hours: float
+    weekly_overtime_limit_hours: float
 
 
 @dataclass(frozen=True)
@@ -47,24 +49,32 @@ JURISDICTION_PACKS: dict[str, JurisdictionPack] = {
         name="Colombia nacional 2026",
         country_code="CO",
         subdivision_code=None,
+        daily_overtime_limit_hours=2.0,
+        weekly_overtime_limit_hours=12.0,
     ),
     "co-bogota-2026": JurisdictionPack(
         code="co-bogota-2026",
         name="Colombia Bogota 2026",
         country_code="CO",
         subdivision_code="DC",
+        daily_overtime_limit_hours=2.0,
+        weekly_overtime_limit_hours=12.0,
     ),
     "mx-federal-2026": JurisdictionPack(
         code="mx-federal-2026",
         name="Mexico federal 2026",
         country_code="MX",
         subdivision_code=None,
+        daily_overtime_limit_hours=3.0,
+        weekly_overtime_limit_hours=9.0,
     ),
     "us-ca-2026": JurisdictionPack(
         code="us-ca-2026",
         name="Estados Unidos California 2026",
         country_code="US",
         subdivision_code="CA",
+        daily_overtime_limit_hours=4.0,
+        weekly_overtime_limit_hours=20.0,
     ),
 }
 

@@ -198,6 +198,25 @@ def test_register_creates_company_admin_and_session(client: TestClient) -> None:
     assert company_payload["settings"]["jurisdiction_code"] == "co-national-2026"
 
 
+def test_catalogs_jurisdictions_returns_supported_packs(
+    client: TestClient,
+    seeded_identity: dict[str, str],
+) -> None:
+    login(
+        client,
+        email=seeded_identity["admin_email"],
+        password=seeded_identity["admin_password"],
+    )
+
+    response = client.get("/v1/catalogs/jurisdictions")
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert len(payload) >= 4
+    assert any(item["code"] == "co-national-2026" for item in payload)
+    assert all("daily_overtime_limit_hours" in item for item in payload)
+    assert all("weekly_overtime_limit_hours" in item for item in payload)
+
+
 def test_company_employee_time_entry_report_and_audit_flow(
     client: TestClient,
     seeded_identity: dict[str, str],
