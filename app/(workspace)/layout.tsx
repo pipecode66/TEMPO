@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 
 import { TempoProvider } from "@/components/workspace/tempo-provider";
 import { WorkspaceShell } from "@/components/workspace/workspace-shell";
-import { ACCESS_COOKIE_NAME, REFRESH_COOKIE_NAME } from "@/lib/auth-cookies";
+import { getServerSession } from "@/lib/server-session";
 
 export default async function WorkspaceLayout({
   children,
@@ -12,11 +12,14 @@ export default async function WorkspaceLayout({
   children: ReactNode;
 }) {
   const cookieStore = await cookies();
-  if (
-    !cookieStore.has(ACCESS_COOKIE_NAME) &&
-    !cookieStore.has(REFRESH_COOKIE_NAME)
-  ) {
+  const session = getServerSession(cookieStore);
+
+  if (!session.isAuthenticated) {
     redirect("/");
+  }
+
+  if (session.role === "consulta") {
+    redirect("/portal");
   }
 
   return (

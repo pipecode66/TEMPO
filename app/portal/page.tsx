@@ -2,15 +2,18 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { EmployeePortal } from "@/components/portal/employee-portal";
-import { ACCESS_COOKIE_NAME, REFRESH_COOKIE_NAME } from "@/lib/auth-cookies";
+import { getServerSession } from "@/lib/server-session";
 
 export default async function PortalPage() {
   const cookieStore = await cookies();
-  if (
-    !cookieStore.has(ACCESS_COOKIE_NAME) &&
-    !cookieStore.has(REFRESH_COOKIE_NAME)
-  ) {
+  const session = getServerSession(cookieStore);
+
+  if (!session.isAuthenticated) {
     redirect("/");
+  }
+
+  if (session.role && session.role !== "consulta") {
+    redirect("/dashboard");
   }
 
   return <EmployeePortal />;
